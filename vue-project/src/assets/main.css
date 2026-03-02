@@ -1,0 +1,19 @@
+/* src/style.css */
+:root {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  min-height: 100vh;
+  display: block; /* Importante: remove o flex padrão do Vite */
+}
+
+#app {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
