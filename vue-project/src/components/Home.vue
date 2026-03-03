@@ -10,7 +10,7 @@
           </p>
           
           <div class="hero-actions">
-            <button class="btn-primary" @click="$emit('navegar', 'publicar')">
+            <button class="btn-primary" @click="$emit('navegar', 'projetos')">
               Explorar Projetos
             </button>
             <button class="btn-secondary" @click="$emit('navegar', 'ideias')">
