@@ -79,7 +79,7 @@ onMounted(carregarDados);
         <div class="brand" @click="paginaAtual = 'home'">CoNexo</div>
         <nav class="nav-center">
           <a @click="paginaAtual = 'home'" :class="{ active: paginaAtual === 'home' }">Home</a>
-          <a @click="paginaAtual = 'publicar'" :class="{ active: paginaAtual === 'publicar' }">Projetos</a>
+          <a @click="paginaAtual = 'publicar'" :class="{ active: paginaAtual === 'publicar' || paginaAtual === 'projetos' }">Projetos</a>
           <a @click="paginaAtual = 'ideias'" :class="{ active: paginaAtual === 'ideias' }">Ideias</a>
         </nav>
         
@@ -104,7 +104,7 @@ onMounted(carregarDados);
       <Login v-if="paginaAtual === 'login'" @logado="confirmarLogin" />
 
       <PublicarProjeto 
-        v-if="paginaAtual === 'publicar'" 
+        v-if="paginaAtual === 'publicar' || paginaAtual === 'projetos'" 
         :projetos="listaProjetos" 
         :user="usuarioLogado"
         @salvar="adicionarProjeto"
