@@ -15,8 +15,8 @@ const usuarioLogado = ref(null);
 const carregarDados = async () => {
   try {
     const [resP, resI] = await Promise.all([
-      fetch('http://localhost:3001/projetos'),
-      fetch('http://localhost:3001/ideias')
+      fetch('https://conexo-api.onrender.com/projetos'),
+      fetch('https://conexo-api.onrender.com/ideias')
     ]);
     if (resP.ok) listaProjetos.value = await resP.json();
     if (resI.ok) listaIdeias.value = await resI.json();
@@ -36,7 +36,7 @@ const deslogar = () => {
 
 // Funções de Adição
 const adicionarProjeto = async (novo) => {
-  const res = await fetch('http://localhost:3001/projetos', {
+  const res = await fetch('https://conexo-api.onrender.com/projetos', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(novo)
@@ -45,7 +45,7 @@ const adicionarProjeto = async (novo) => {
 };
 
 const adicionarIdeia = async (nova) => {
-  const res = await fetch('http://localhost:3001/ideias', {
+  const res = await fetch('https://conexo-api.onrender.com/ideias', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(nova)
@@ -59,7 +59,7 @@ const deletarItem = async (tipo, id) => {
   
   const rota = tipo === 'projeto' ? 'projetos' : 'ideias';
   try {
-    const res = await fetch(`http://localhost:3001/${rota}/${id}`, { method: 'DELETE' });
+    const res = await fetch(`https://conexo-api.onrender.com/${rota}/${id}`, { method: 'DELETE' });
     if (res.ok) {
       alert("Excluído com sucesso!");
       await carregarDados();

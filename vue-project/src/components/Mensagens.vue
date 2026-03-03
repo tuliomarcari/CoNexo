@@ -39,7 +39,7 @@ const carregarConversas = async () => {
   if (!props.usuario) return;
   
   try {
-    const res = await fetch(`http://localhost:3001/minhas-conversas/${props.usuario.id}`);
+    const res = await fetch(`https://conexo-api.onrender.com/minhas-conversas/${props.usuario.id}`);
     if (res.ok) {
       conversas.value = await res.json();
     }

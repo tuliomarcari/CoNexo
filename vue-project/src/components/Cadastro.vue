@@ -21,7 +21,7 @@ const senha = ref('');
 const emit = defineEmits(['ir-para-login']);
 
 const registrar = async () => {
-  const res = await fetch('http://localhost:3001/cadastro', {
+  const res = await fetch('https://conexo-api.onrender.com/cadastro', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ nome: nome.value, email: email.value, senha: senha.value, tipo: 'cliente' })

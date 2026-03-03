@@ -19,7 +19,7 @@ const senha = ref('');
 const emit = defineEmits(['logado', 'ir-para-cadastro']);
 
 const entrar = async () => {
-  const res = await fetch('http://localhost:3001/login', {
+  const res = await fetch('https://conexo-api.onrender.com/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email.value, senha: senha.value })

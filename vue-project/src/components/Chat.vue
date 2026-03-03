@@ -38,7 +38,7 @@ const novaMsg = ref('');
 const chatWindow = ref(null);
 
 const carregarMensagens = async () => {
-  const res = await fetch(`http://localhost:3001/mensagens/${props.projeto.id}/${props.usuario.id}`);
+  const res = await fetch(`https://conexo-api.onrender.com/mensagens/${props.projeto.id}/${props.usuario.id}`);
   if (res.ok) {
     mensagens.value = await res.json();
     await nextTick();
@@ -52,7 +52,7 @@ const enviar = async () => {
     projeto_id: props.projeto.id, autor_nome: props.usuario.nome, 
     texto: novaMsg.value, remetente_id: props.usuario.id, destinatario_id: destinatario 
   };
-  await fetch('http://localhost:3001/mensagens', {
+  await fetch('https://conexo-api.onrender.com/mensagens', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   });
   novaMsg.value = '';
