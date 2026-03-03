@@ -95,7 +95,11 @@ onMounted(carregarDados);
     </header>
 
     <main class="main-content">
-      <Home v-if="paginaAtual === 'home'" :projetos="listaProjetos" />
+      <Home 
+        v-if="paginaAtual === 'home'" 
+        :projetos="listaProjetos" 
+        @navegar="destino => paginaAtual = destino"
+      />
       
       <Login v-if="paginaAtual === 'login'" @logado="confirmarLogin" />
 
