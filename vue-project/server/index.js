@@ -12,7 +12,7 @@ const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME, // Lendo 'defaultdb' do Render
+  database: process.env.DB_NAME,
   port: process.env.DB_PORT,
   ssl: { rejectUnauthorized: false },
   waitForConnections: true,
@@ -20,12 +20,12 @@ const pool = mysql.createPool({
   queueLimit: 0
 }).promise();
 
-// --- CORREÇÃO AUTOMÁTICA DO BANCO ---
+// --- SINCRONIZAÇÃO AUTOMÁTICA DO BANCO ---
 const inicializarBanco = async () => {
   try {
     console.log("🚀 Verificando e corrigindo estrutura do banco...");
 
-    // 1. Garante que a tabela de usuários existe
+    // 1. Tabela de Usuários (Correção do Nível incluída)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -35,12 +35,9 @@ const inicializarBanco = async () => {
         nivel VARCHAR(50) DEFAULT 'cliente'
       )
     `);
-
-    // 2. CORREÇÃO DO ERRO 500: Aumenta o espaço da coluna 'nivel'
-    // Isso resolve o erro "Data truncated for column 'nivel'" visto nos logs
     await pool.query("ALTER TABLE usuarios MODIFY COLUMN nivel VARCHAR(50) DEFAULT 'cliente'");
-    
-    // 3. Garante que a tabela de projetos tem os novos campos de contato
+
+    // 2. Tabela de Projetos (Com campos de contato)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS projetos (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -57,43 +54,45 @@ const inicializarBanco = async () => {
       )
     `);
 
-    console.log("✅ Banco de dados 'defaultdb' pronto e corrigido!");
+    // 3. Tabela de Ideias (Para corrigir o erro de 'Nenhuma ideia ainda')
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ideias (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        titulo VARCHAR(255) NOT NULL,
+        nicho VARCHAR(100),
+        descricao TEXT NOT NULL,
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    console.log("✅ Todas as tabelas (Usuários, Projetos e Ideias) estão prontas!");
   } catch (err) {
     console.error("❌ Erro na inicialização:", err.message);
   }
 };
 inicializarBanco();
 
-// --- ROTA DE CADASTRO ---
+// --- ROTAS DE USUÁRIOS ---
 app.post("/cadastro", async (req, res) => {
   const { nome, email, senha } = req.body;
   try {
-    // Insere o novo usuário (o nivel padrão será 'cliente' e agora cabe no banco)
     const [result] = await pool.query(
       "INSERT INTO usuarios (nome, email, senha, nivel) VALUES (?, ?, ?, 'cliente')",
       [nome, email, senha]
     );
-    console.log("👤 Novo usuário cadastrado:", email);
-    res.status(201).json({ id: result.insertId, nome, email, message: "Cadastro realizado com sucesso!" });
+    res.status(201).json({ id: result.insertId, message: "Sucesso!" });
   } catch (err) {
-    console.error("❌ Erro no cadastro:", err.sqlMessage || err.message);
-    res.status(500).json({ error: err.sqlMessage || "Erro ao salvar usuário" });
+    res.status(500).json({ error: err.sqlMessage || "Erro no cadastro" });
   }
 });
 
-// --- ROTA DE LOGIN ---
 app.post("/login", async (req, res) => {
   const { email, senha } = req.body;
   try {
     const [rows] = await pool.query("SELECT * FROM usuarios WHERE email = ? AND senha = ?", [email, senha]);
-    if (rows.length > 0) {
-      res.json(rows[0]);
-    } else {
-      res.status(401).json({ message: "E-mail ou senha incorretos." });
-    }
-  } catch (err) {
-    res.status(500).json({ error: "Erro no servidor" });
-  }
+    if (rows.length > 0) res.json(rows[0]);
+    else res.status(401).json({ message: "Login incorreto" });
+  } catch (err) { res.status(500).json(err); }
 });
 
 // --- ROTAS DE PROJETOS ---
@@ -101,31 +100,45 @@ app.get("/projetos", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM projetos ORDER BY id DESC");
     res.json(rows);
-  } catch (err) {
-    res.status(500).json(err);
-  }
+  } catch (err) { res.status(500).json(err); }
 });
 
 app.post("/projetos", async (req, res) => {
   const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone } = req.body;
   try {
-    const sql = `INSERT INTO projetos 
-      (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone) 
-      VALUES (?,?,?,?,?,?,?,?,?,?)`;
-    
-    await pool.query(sql, [
-      empresa, estado, cidade, nicho, descricao, valor, porcentagem, 
-      usuario_id || 1, email_contato, telefone
-    ]);
-    res.status(201).json({ message: "Projeto publicado com sucesso!" });
+    await pool.query(
+      "INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone) VALUES (?,?,?,?,?,?,?,?,?,?)",
+      [empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id || 1, email_contato, telefone]
+    );
+    res.status(201).json({ message: "Projeto publicado!" });
+  } catch (err) { res.status(500).json(err); }
+});
+
+// --- ROTAS DE IDEIAS (CORRIGIDAS) ---
+app.get("/ideias", async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM ideias ORDER BY id DESC");
+    res.json(rows);
   } catch (err) {
-    console.error("Erro ao publicar projeto:", err);
-    res.status(500).json(err);
+    res.status(500).json({ error: "Erro ao buscar ideias" });
   }
 });
 
-// --- INICIALIZAÇÃO DO SERVIDOR ---
-const port = process.env.PORT || 10000; // Ajustado para a porta padrão do Render nos logs
+app.post("/ideias", async (req, res) => {
+  const { titulo, nicho, descricao } = req.body;
+  try {
+    const [result] = await pool.query(
+      "INSERT INTO ideias (titulo, nicho, descricao) VALUES (?, ?, ?)",
+      [titulo, nicho, descricao]
+    );
+    res.status(201).json({ id: result.insertId, ...req.body });
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao salvar ideia" });
+  }
+});
+
+// --- INICIALIZAÇÃO ---
+const port = process.env.PORT || 10000;
 app.listen(port, '0.0.0.0', () => {
-  console.log(`🚀 Servidor CoNexo rodando na porta ${port}`);
+  console.log(`🚀 CoNexo rodando na porta ${port}`);
 });
