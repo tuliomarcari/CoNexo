@@ -3,7 +3,8 @@ import { ref, onMounted } from 'vue';
 import Home from './components/Home.vue';
 import PublicarProjeto from './components/Publicarprojeto.vue';
 import Ideias from './components/Ideias.vue';
-import Login from './components/Login.vue'; // Importamos o Login
+import Login from './components/Login.vue';
+import Cadastro from './components/Cadastro.vue'; // IMPORTANTE: Importar o novo componente
 
 const paginaAtual = ref('home');
 const listaProjetos = ref([]);
@@ -23,7 +24,7 @@ const carregarDados = async () => {
   } catch (err) { console.error("Erro ao carregar dados:", err); }
 };
 
-// Gerenciamento de Login
+// Gerenciamento de Login e Cadastro
 const confirmarLogin = (dados) => {
   usuarioLogado.value = dados;
   paginaAtual.value = 'home';
@@ -101,7 +102,16 @@ onMounted(carregarDados);
         @navegar="destino => paginaAtual = destino"
       />
       
-      <Login v-if="paginaAtual === 'login'" @logado="confirmarLogin" />
+      <Login 
+        v-if="paginaAtual === 'login'" 
+        @logado="confirmarLogin" 
+        @ir-para-cadastro="paginaAtual = 'cadastro'" 
+      />
+
+      <Cadastro 
+        v-if="paginaAtual === 'cadastro'" 
+        @ir-para-login="paginaAtual = 'login'" 
+      />
 
       <PublicarProjeto 
         v-if="paginaAtual === 'publicar' || paginaAtual === 'projetos'" 
