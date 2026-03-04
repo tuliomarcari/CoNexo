@@ -7,6 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Configuração da Pool com suporte a Promises
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -17,97 +18,134 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
-});
+}).promise(); // Adicionado .promise() para evitar erros de sincronia
 
-// --- EXECUÇÃO ÚNICA: GARANTIR QUE O BANCO TEM AS COLUNAS NOVAS ---
-// Estes comandos garantem a estrutura para salvar novos clientes e contatos de projetos
-pool.query(`ALTER TABLE projetos ADD COLUMN IF NOT EXISTS email_contato VARCHAR(255)`, () => {});
-pool.query(`ALTER TABLE projetos ADD COLUMN IF NOT EXISTS telefone VARCHAR(20)`, () => {});
-pool.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS nivel VARCHAR(20) DEFAULT 'cliente'`, () => {});
+// --- INICIALIZAÇÃO DO BANCO (EXECUTADO AO SUBIR NO RENDER) ---
+const inicializarBanco = async () => {
+  try {
+    // 1. Criar tabela de usuários se não existir
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS usuarios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        senha VARCHAR(255) NOT NULL,
+        nivel VARCHAR(20) DEFAULT 'cliente'
+      )
+    `);
+
+    // 2. Garantir colunas novas na tabela de projetos
+    const [colunas] = await pool.query("SHOW COLUMNS FROM projetos");
+    const nomesColunas = colunas.map(c => c.Field);
+
+    if (!nomesColunas.includes('email_contato')) {
+      await pool.query("ALTER TABLE projetos ADD COLUMN email_contato VARCHAR(255)");
+    }
+    if (!nomesColunas.includes('telefone')) {
+      await pool.query("ALTER TABLE projetos ADD COLUMN telefone VARCHAR(20)");
+    }
+    
+    console.log("✅ Banco de dados sincronizado com sucesso!");
+  } catch (err) {
+    console.error("❌ Erro na inicialização do banco:", err.message);
+  }
+};
+inicializarBanco();
 
 // --- ROTA DE LOGIN ---
-app.post("/login", (req, res) => {
+app.post("/login", async (req, res) => {
   const { email, senha } = req.body;
-  const sql = "SELECT id, nome, nivel FROM usuarios WHERE email = ? AND senha = ?";
-  
-  pool.query(sql, [email, senha], (err, result) => {
-    if (err) return res.status(500).send({ message: "Erro no servidor" });
-    if (result.length > 0) {
-      res.send(result[0]);
+  try {
+    const [rows] = await pool.query("SELECT id, nome, nivel FROM usuarios WHERE email = ? AND senha = ?", [email, senha]);
+    if (rows.length > 0) {
+      res.send(rows[0]);
     } else {
       res.status(401).send({ message: "E-mail ou senha incorretos!" });
     }
-  });
+  } catch (err) {
+    res.status(500).send({ message: "Erro no servidor" });
+  }
 });
 
-// --- ROTA DE CADASTRO (SALVA NOVOS CLIENTES) ---
-app.post("/cadastro", (req, res) => {
+// --- ROTA DE CADASTRO (CLIENTES) ---
+app.post("/cadastro", async (req, res) => {
   const { nome, email, senha, tipo } = req.body;
-  
-  const checkSql = "SELECT id FROM usuarios WHERE email = ?";
-  pool.query(checkSql, [email], (err, result) => {
-    if (err) return res.status(500).send(err);
-    if (result.length > 0) {
+  try {
+    const [existente] = await pool.query("SELECT id FROM usuarios WHERE email = ?", [email]);
+    if (existente.length > 0) {
       return res.status(400).send({ message: "Este e-mail já está cadastrado!" });
     }
 
-    const sql = "INSERT INTO usuarios (nome, email, senha, nivel) VALUES (?, ?, ?, ?)";
     const nivel = tipo === 'admin' ? 'admin' : 'cliente';
-    
-    pool.query(sql, [nome, email, senha, nivel], (err, insertResult) => {
-      if (err) return res.status(500).send(err);
-      res.status(201).send({ id: insertResult.insertId, nome, email, nivel });
-    });
-  });
+    const [result] = await pool.query(
+      "INSERT INTO usuarios (nome, email, senha, nivel) VALUES (?, ?, ?, ?)",
+      [nome, email, senha, nivel]
+    );
+    res.status(201).send({ id: result.insertId, nome, email, nivel });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Erro ao realizar cadastro no banco." });
+  }
 });
 
 // --- ROTAS DE PROJETOS ---
-app.get("/projetos", (req, res) => {
-  pool.query("SELECT * FROM projetos ORDER BY id DESC", (err, result) => {
-    if (err) return res.status(500).send(err);
-    res.send(result);
-  });
+app.get("/projetos", async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM projetos ORDER BY id DESC");
+    res.send(rows);
+  } catch (err) {
+    res.status(500).send(err);
+  }
 });
 
-app.post("/projetos", (req, res) => {
+app.post("/projetos", async (req, res) => {
   const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone } = req.body;
+  const sql = `INSERT INTO projetos 
+    (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone) 
+    VALUES (?,?,?,?,?,?,?,?,?,?)`;
   
-  const sql = "INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone) VALUES (?,?,?,?,?,?,?,?,?,?)";
-  
-  pool.query(sql, [
-    empresa, estado, cidade, nicho, descricao, valor, porcentagem, 
-    usuario_id || 1, email_contato, telefone
-  ], (err, result) => {
-    if (err) return res.status(500).send(err);
+  try {
+    const [result] = await pool.query(sql, [
+      empresa, estado, cidade, nicho, descricao, valor, porcentagem, 
+      usuario_id || 1, email_contato, telefone
+    ]);
     res.status(201).send({ id: result.insertId, ...req.body });
-  });
+  } catch (err) {
+    res.status(500).send(err);
+  }
 });
 
-app.delete("/projetos/:id", (req, res) => {
+app.delete("/projetos/:id", async (req, res) => {
   const { id } = req.params;
-  pool.query("DELETE FROM projetos WHERE id = ?", [id], (err, result) => {
-    if (err) return res.status(500).send(err);
+  try {
+    await pool.query("DELETE FROM projetos WHERE id = ?", [id]);
     res.send({ message: "Projeto excluído com sucesso!" });
-  });
+  } catch (err) {
+    res.status(500).send(err);
+  }
 });
 
 // --- ROTAS DE IDEIAS ---
-app.get("/ideias", (req, res) => {
-  pool.query("SELECT * FROM ideias ORDER BY id DESC", (err, result) => {
-    if (err) return res.status(500).send(err);
-    res.send(result);
-  });
+app.get("/ideias", async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM ideias ORDER BY id DESC");
+    res.send(rows);
+  } catch (err) {
+    res.status(500).send(err);
+  }
 });
 
-app.post("/ideias", (req, res) => {
+app.post("/ideias", async (req, res) => {
   const { titulo, nicho, descricao } = req.body;
-  const sql = "INSERT INTO ideias (titulo, nicho, descricao) VALUES (?, ?, ?)";
-  pool.query(sql, [titulo, nicho, descricao], (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    const [result] = await pool.query("INSERT INTO ideias (titulo, nicho, descricao) VALUES (?, ?, ?)", [titulo, nicho, descricao]);
     res.status(201).json({ id: result.insertId, ...req.body });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+// --- INICIALIZAÇÃO DO SERVIDOR ---
 const port = process.env.PORT || 3001;
 app.listen(port, '0.0.0.0', () => {
   console.log(`🚀 Servidor CoNexo rodando na porta ${port}`);
