@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Configuração da Pool com Promises para o defaultdb
+// Configuração da Pool de Conexão com o Aiven
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -20,12 +20,12 @@ const pool = mysql.createPool({
   queueLimit: 0
 }).promise();
 
-// --- SINCRONIZAÇÃO AUTOMÁTICA DO BANCO ---
+// --- INICIALIZAÇÃO E SINCRONIZAÇÃO DO BANCO ---
 const inicializarBanco = async () => {
   try {
-    console.log("🚀 Verificando e corrigindo estrutura do banco...");
+    console.log("🚀 Sincronizando Central de Mediação e Tabelas...");
 
-    // 1. Tabela de Usuários (Correção do Nível incluída)
+    // 1. Tabela de Usuários (Garante coluna nivel para Admin)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -37,7 +37,7 @@ const inicializarBanco = async () => {
     `);
     await pool.query("ALTER TABLE usuarios MODIFY COLUMN nivel VARCHAR(50) DEFAULT 'cliente'");
 
-    // 2. Tabela de Projetos (Com campos de contato)
+    // 2. Tabela de Projetos
     await pool.query(`
       CREATE TABLE IF NOT EXISTS projetos (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -54,7 +54,7 @@ const inicializarBanco = async () => {
       )
     `);
 
-    // 3. Tabela de Ideias (Para corrigir o erro de 'Nenhuma ideia ainda')
+    // 3. Tabela de Ideias
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ideias (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -65,22 +65,44 @@ const inicializarBanco = async () => {
       )
     `);
 
-    console.log("✅ Todas as tabelas (Usuários, Projetos e Ideias) estão prontas!");
+    // 4. Tabela de Tickets (Salas de conversa para intermediação)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tickets (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        projeto_id INT,
+        cliente_id INT,
+        status VARCHAR(50) DEFAULT 'em_analise',
+        data_abertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 5. Tabela de Mensagens
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS mensagens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ticket_id INT,
+        remetente_id INT,
+        conteudo TEXT NOT NULL,
+        data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    console.log("✅ Sistema CoNexo totalmente sincronizado!");
   } catch (err) {
-    console.error("❌ Erro na inicialização:", err.message);
+    console.error("❌ Erro na inicialização do banco:", err.message);
   }
 };
 inicializarBanco();
 
-// --- ROTAS DE USUÁRIOS ---
+// --- ROTAS DE AUTENTICAÇÃO ---
 app.post("/cadastro", async (req, res) => {
   const { nome, email, senha } = req.body;
   try {
-    const [result] = await pool.query(
+    await pool.query(
       "INSERT INTO usuarios (nome, email, senha, nivel) VALUES (?, ?, ?, 'cliente')",
       [nome, email, senha]
     );
-    res.status(201).json({ id: result.insertId, message: "Sucesso!" });
+    res.status(201).json({ message: "Cadastro realizado com sucesso!" });
   } catch (err) {
     res.status(500).json({ error: err.sqlMessage || "Erro no cadastro" });
   }
@@ -91,11 +113,11 @@ app.post("/login", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM usuarios WHERE email = ? AND senha = ?", [email, senha]);
     if (rows.length > 0) res.json(rows[0]);
-    else res.status(401).json({ message: "Login incorreto" });
-  } catch (err) { res.status(500).json(err); }
+    else res.status(401).json({ message: "Credenciais inválidas" });
+  } catch (err) { res.status(500).json({ error: "Erro no servidor" }); }
 });
 
-// --- ROTAS DE PROJETOS ---
+// --- ROTAS DE PROJETOS E IDEIAS ---
 app.get("/projetos", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM projetos ORDER BY id DESC");
@@ -114,31 +136,65 @@ app.post("/projetos", async (req, res) => {
   } catch (err) { res.status(500).json(err); }
 });
 
-// --- ROTAS DE IDEIAS (CORRIGIDAS) ---
 app.get("/ideias", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM ideias ORDER BY id DESC");
     res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: "Erro ao buscar ideias" });
-  }
+  } catch (err) { res.status(500).json({ error: "Erro ao buscar ideias" }); }
 });
 
-app.post("/ideias", async (req, res) => {
-  const { titulo, nicho, descricao } = req.body;
+// --- ROTAS DE INTERMEDIAÇÃO (ADMIN & TICKETS) ---
+
+// Abrir ou recuperar ticket de conversa
+app.post("/tickets", async (req, res) => {
+  const { projeto_id, cliente_id } = req.body;
   try {
-    const [result] = await pool.query(
-      "INSERT INTO ideias (titulo, nicho, descricao) VALUES (?, ?, ?)",
-      [titulo, nicho, descricao]
-    );
-    res.status(201).json({ id: result.insertId, ...req.body });
-  } catch (err) {
-    res.status(500).json({ error: "Erro ao salvar ideia" });
-  }
+    const [existente] = await pool.query("SELECT id FROM tickets WHERE projeto_id = ? AND cliente_id = ?", [projeto_id, cliente_id]);
+    if (existente.length > 0) return res.json({ ticketId: existente[0].id });
+
+    const [result] = await pool.query("INSERT INTO tickets (projeto_id, cliente_id) VALUES (?, ?)", [projeto_id, cliente_id]);
+    res.status(201).json({ ticketId: result.insertId });
+  } catch (err) { res.status(500).json(err); }
 });
 
-// --- INICIALIZAÇÃO ---
+// Enviar mensagem no ticket
+app.post("/mensagens", async (req, res) => {
+  const { ticket_id, remetente_id, conteudo } = req.body;
+  try {
+    await pool.query("INSERT INTO mensagens (ticket_id, remetente_id, conteudo) VALUES (?, ?, ?)", [ticket_id, remetente_id, conteudo]);
+    res.status(201).json({ message: "Mensagem enviada" });
+  } catch (err) { res.status(500).json(err); }
+});
+
+// Listar tickets (Apenas para Admin)
+app.get("/admin/tickets", async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT t.*, p.empresa, u.nome as nome_cliente 
+      FROM tickets t
+      JOIN projetos p ON t.projeto_id = p.id
+      JOIN usuarios u ON t.cliente_id = u.id
+      ORDER BY t.data_abertura DESC
+    `);
+    res.json(rows);
+  } catch (err) { res.status(500).json(err); }
+});
+
+// Ver mensagens de um ticket
+app.get("/tickets/:id/mensagens", async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT m.*, u.nome as nome_remetente, u.nivel 
+      FROM mensagens m
+      JOIN usuarios u ON m.remetente_id = u.id
+      WHERE m.ticket_id = ?
+      ORDER BY m.data_envio ASC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json(err); }
+});
+
 const port = process.env.PORT || 10000;
 app.listen(port, '0.0.0.0', () => {
-  console.log(`🚀 CoNexo rodando na porta ${port}`);
+  console.log(`🚀 CoNexo Central Mediação rodando na porta ${port}`);
 });
