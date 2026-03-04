@@ -7,12 +7,12 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Configuração da conexão usando as variáveis do Render
+// Configuração da Pool com Promises para o defaultdb
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME, // Aqui ele vai ler 'defaultdb'
+  database: process.env.DB_NAME, // Lendo 'defaultdb' do Render
   port: process.env.DB_PORT,
   ssl: { rejectUnauthorized: false },
   waitForConnections: true,
@@ -20,23 +20,27 @@ const pool = mysql.createPool({
   queueLimit: 0
 }).promise();
 
-// --- FUNÇÃO QUE CRIA AS TABELAS AUTOMATICAMENTE ---
+// --- CORREÇÃO AUTOMÁTICA DO BANCO ---
 const inicializarBanco = async () => {
   try {
-    console.log("🛠️ Verificando estrutura do banco...");
+    console.log("🚀 Verificando e corrigindo estrutura do banco...");
 
-    // Cria tabela de usuários para o cadastro funcionar
+    // 1. Garante que a tabela de usuários existe
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
         nome VARCHAR(255) NOT NULL,
         email VARCHAR(255) NOT NULL UNIQUE,
         senha VARCHAR(255) NOT NULL,
-        nivel VARCHAR(20) DEFAULT 'cliente'
+        nivel VARCHAR(50) DEFAULT 'cliente'
       )
     `);
 
-    // Cria ou atualiza a tabela de projetos
+    // 2. CORREÇÃO DO ERRO 500: Aumenta o espaço da coluna 'nivel'
+    // Isso resolve o erro "Data truncated for column 'nivel'" visto nos logs
+    await pool.query("ALTER TABLE usuarios MODIFY COLUMN nivel VARCHAR(50) DEFAULT 'cliente'");
+    
+    // 3. Garante que a tabela de projetos tem os novos campos de contato
     await pool.query(`
       CREATE TABLE IF NOT EXISTS projetos (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -53,9 +57,9 @@ const inicializarBanco = async () => {
       )
     `);
 
-    console.log("✅ Banco de dados 'defaultdb' pronto para uso!");
+    console.log("✅ Banco de dados 'defaultdb' pronto e corrigido!");
   } catch (err) {
-    console.error("❌ Erro ao configurar tabelas:", err.message);
+    console.error("❌ Erro na inicialização:", err.message);
   }
 };
 inicializarBanco();
@@ -64,14 +68,16 @@ inicializarBanco();
 app.post("/cadastro", async (req, res) => {
   const { nome, email, senha } = req.body;
   try {
+    // Insere o novo usuário (o nivel padrão será 'cliente' e agora cabe no banco)
     const [result] = await pool.query(
       "INSERT INTO usuarios (nome, email, senha, nivel) VALUES (?, ?, ?, 'cliente')",
       [nome, email, senha]
     );
-    res.status(201).json({ id: result.insertId, message: "Sucesso!" });
+    console.log("👤 Novo usuário cadastrado:", email);
+    res.status(201).json({ id: result.insertId, nome, email, message: "Cadastro realizado com sucesso!" });
   } catch (err) {
-    console.error("Erro no cadastro:", err.sqlMessage);
-    res.status(500).json({ error: err.sqlMessage || "Erro ao salvar" });
+    console.error("❌ Erro no cadastro:", err.sqlMessage || err.message);
+    res.status(500).json({ error: err.sqlMessage || "Erro ao salvar usuário" });
   }
 });
 
@@ -80,9 +86,14 @@ app.post("/login", async (req, res) => {
   const { email, senha } = req.body;
   try {
     const [rows] = await pool.query("SELECT * FROM usuarios WHERE email = ? AND senha = ?", [email, senha]);
-    if (rows.length > 0) res.json(rows[0]);
-    else res.status(401).json({ message: "Login incorreto" });
-  } catch (err) { res.status(500).json(err); }
+    if (rows.length > 0) {
+      res.json(rows[0]);
+    } else {
+      res.status(401).json({ message: "E-mail ou senha incorretos." });
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Erro no servidor" });
+  }
 });
 
 // --- ROTAS DE PROJETOS ---
@@ -90,21 +101,31 @@ app.get("/projetos", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM projetos ORDER BY id DESC");
     res.json(rows);
-  } catch (err) { res.status(500).json(err); }
+  } catch (err) {
+    res.status(500).json(err);
+  }
 });
 
 app.post("/projetos", async (req, res) => {
   const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone } = req.body;
   try {
-    await pool.query(
-      "INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone) VALUES (?,?,?,?,?,?,?,?,?,?)",
-      [empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone]
-    );
-    res.status(201).json({ message: "Projeto publicado!" });
-  } catch (err) { res.status(500).json(err); }
+    const sql = `INSERT INTO projetos 
+      (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone) 
+      VALUES (?,?,?,?,?,?,?,?,?,?)`;
+    
+    await pool.query(sql, [
+      empresa, estado, cidade, nicho, descricao, valor, porcentagem, 
+      usuario_id || 1, email_contato, telefone
+    ]);
+    res.status(201).json({ message: "Projeto publicado com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao publicar projeto:", err);
+    res.status(500).json(err);
+  }
 });
 
-const port = process.env.PORT || 3001;
+// --- INICIALIZAÇÃO DO SERVIDOR ---
+const port = process.env.PORT || 10000; // Ajustado para a porta padrão do Render nos logs
 app.listen(port, '0.0.0.0', () => {
-  console.log(`🚀 Servidor rodando na porta ${port}`);
+  console.log(`🚀 Servidor CoNexo rodando na porta ${port}`);
 });
