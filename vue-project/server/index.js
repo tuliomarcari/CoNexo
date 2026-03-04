@@ -19,6 +19,12 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+// --- EXECUÇÃO ÚNICA: GARANTIR QUE O BANCO TEM AS COLUNAS NOVAS ---
+// Estes comandos garantem a estrutura para salvar novos clientes e contatos de projetos
+pool.query(`ALTER TABLE projetos ADD COLUMN IF NOT EXISTS email_contato VARCHAR(255)`, () => {});
+pool.query(`ALTER TABLE projetos ADD COLUMN IF NOT EXISTS telefone VARCHAR(20)`, () => {});
+pool.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS nivel VARCHAR(20) DEFAULT 'cliente'`, () => {});
+
 // --- ROTA DE LOGIN ---
 app.post("/login", (req, res) => {
   const { email, senha } = req.body;
@@ -34,6 +40,27 @@ app.post("/login", (req, res) => {
   });
 });
 
+// --- ROTA DE CADASTRO (SALVA NOVOS CLIENTES) ---
+app.post("/cadastro", (req, res) => {
+  const { nome, email, senha, tipo } = req.body;
+  
+  const checkSql = "SELECT id FROM usuarios WHERE email = ?";
+  pool.query(checkSql, [email], (err, result) => {
+    if (err) return res.status(500).send(err);
+    if (result.length > 0) {
+      return res.status(400).send({ message: "Este e-mail já está cadastrado!" });
+    }
+
+    const sql = "INSERT INTO usuarios (nome, email, senha, nivel) VALUES (?, ?, ?, ?)";
+    const nivel = tipo === 'admin' ? 'admin' : 'cliente';
+    
+    pool.query(sql, [nome, email, senha, nivel], (err, insertResult) => {
+      if (err) return res.status(500).send(err);
+      res.status(201).send({ id: insertResult.insertId, nome, email, nivel });
+    });
+  });
+});
+
 // --- ROTAS DE PROJETOS ---
 app.get("/projetos", (req, res) => {
   pool.query("SELECT * FROM projetos ORDER BY id DESC", (err, result) => {
@@ -43,9 +70,14 @@ app.get("/projetos", (req, res) => {
 });
 
 app.post("/projetos", (req, res) => {
-  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id } = req.body;
-  const sql = "INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id) VALUES (?,?,?,?,?,?,?,?)";
-  pool.query(sql, [empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id || 1], (err, result) => {
+  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone } = req.body;
+  
+  const sql = "INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone) VALUES (?,?,?,?,?,?,?,?,?,?)";
+  
+  pool.query(sql, [
+    empresa, estado, cidade, nicho, descricao, valor, porcentagem, 
+    usuario_id || 1, email_contato, telefone
+  ], (err, result) => {
     if (err) return res.status(500).send(err);
     res.status(201).send({ id: result.insertId, ...req.body });
   });
@@ -76,16 +108,6 @@ app.post("/ideias", (req, res) => {
   });
 });
 
-app.delete("/ideias/:id", (req, res) => {
-  const { id } = req.params;
-  pool.query("DELETE FROM ideias WHERE id = ?", [id], (err, result) => {
-    if (err) return res.status(500).send(err);
-    res.send({ message: "Ideia excluída com sucesso!" });
-  });
-});
-
-// --- AJUSTE DA PORTA PARA O RENDER ---
-// Ele tenta usar a variável PORT do Render, se não existir, usa a 3001
 const port = process.env.PORT || 3001;
 app.listen(port, '0.0.0.0', () => {
   console.log(`🚀 Servidor CoNexo rodando na porta ${port}`);
