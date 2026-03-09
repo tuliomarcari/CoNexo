@@ -19,36 +19,135 @@ const pool = mysql.createPool({
   queueLimit: 0
 }).promise();
 
-// Função para garantir que o banco permita a exclusão em cascata
 const inicializarBanco = async () => {
   try {
-    console.log("🚀 Verificando integridade das tabelas...");
+    console.log("🚀 Sincronizando tabelas com sistema de moderação...");
     
-    // Criar tabelas básicas se não existirem
+    // Usuarios
     await pool.query(`CREATE TABLE IF NOT EXISTS usuarios (id INT AUTO_INCREMENT PRIMARY KEY, nome VARCHAR(255), email VARCHAR(255) UNIQUE, senha VARCHAR(255), nivel VARCHAR(50) DEFAULT 'cliente')`);
-    await pool.query(`CREATE TABLE IF NOT EXISTS projetos (id INT AUTO_INCREMENT PRIMARY KEY, empresa VARCHAR(255), estado VARCHAR(10), cidade VARCHAR(255), nicho VARCHAR(255), descricao TEXT, valor DECIMAL(15,2), porcentagem INT, usuario_id INT, email_contato VARCHAR(255), telefone VARCHAR(20))`);
-    await pool.query(`CREATE TABLE IF NOT EXISTS ideias (id INT AUTO_INCREMENT PRIMARY KEY, titulo VARCHAR(255), nicho VARCHAR(100), descricao TEXT, data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+    
+    // Projetos (Adicionado campo STATUS)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS projetos (
+        id INT AUTO_INCREMENT PRIMARY KEY, 
+        empresa VARCHAR(255), 
+        estado VARCHAR(10), 
+        cidade VARCHAR(255), 
+        nicho VARCHAR(255), 
+        descricao TEXT, 
+        valor DECIMAL(15,2), 
+        porcentagem INT, 
+        usuario_id INT, 
+        email_contato VARCHAR(255), 
+        telefone VARCHAR(20),
+        status VARCHAR(20) DEFAULT 'pendente'
+      )
+    `);
+
+    // Ideias (Adicionado campo STATUS)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ideias (
+        id INT AUTO_INCREMENT PRIMARY KEY, 
+        titulo VARCHAR(255), 
+        nicho VARCHAR(100), 
+        descricao TEXT, 
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(20) DEFAULT 'pendente'
+      )
+    `);
+
     await pool.query(`CREATE TABLE IF NOT EXISTS tickets (id INT AUTO_INCREMENT PRIMARY KEY, projeto_id INT, cliente_id INT, status VARCHAR(50) DEFAULT 'em_analise', data_abertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
     await pool.query(`CREATE TABLE IF NOT EXISTS mensagens (id INT AUTO_INCREMENT PRIMARY KEY, ticket_id INT, remetente_id INT, conteudo TEXT, data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-    console.log("✅ Tabelas sincronizadas. Aplicando regras de exclusão...");
-    
-    // Tenta aplicar o CASCADE (Isso evita o erro 500 ao excluir)
-    try {
-        await pool.query("ALTER TABLE tickets ADD CONSTRAINT fk_projeto FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE");
-        await pool.query("ALTER TABLE mensagens ADD CONSTRAINT fk_ticket FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE");
-    } catch (e) {
-        // Se já existirem as constraints, ele apenas ignora o erro
-    }
+    // Garante que a coluna status exista caso as tabelas já tenham sido criadas antes
+    await pool.query("ALTER TABLE projetos ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pendente'");
+    await pool.query("ALTER TABLE ideias ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pendente'");
 
-    console.log("✅ Sistema CoNexo pronto!");
+    console.log("✅ Banco de dados atualizado para Moderação!");
   } catch (err) {
     console.error("❌ Erro na inicialização:", err.message);
   }
 };
 inicializarBanco();
 
-// --- ROTAS DE AUTENTICAÇÃO ---
+// --- ROTAS DE PROJETOS (FILTRADAS PARA O PÚBLICO) ---
+app.get("/projetos", async (req, res) => {
+  try {
+    // O público só vê projetos 'aprovados'
+    const [rows] = await pool.query("SELECT * FROM projetos WHERE status = 'aprovado' ORDER BY id DESC");
+    res.json(rows);
+  } catch (err) { res.status(500).json(err); }
+});
+
+app.post("/projetos", async (req, res) => {
+  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone } = req.body;
+  try {
+    // Todo novo projeto entra como 'pendente'
+    await pool.query("INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, status) VALUES (?,?,?,?,?,?,?,?,?,?, 'pendente')", 
+    [empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id || 1, email_contato, telefone]);
+    res.status(201).json({ message: "Projeto enviado para análise!" });
+  } catch (err) { res.status(500).json(err); }
+});
+
+// --- ROTAS DE IDEIAS (FILTRADAS PARA O PÚBLICO) ---
+app.get("/ideias", async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM ideias WHERE status = 'aprovado' ORDER BY id DESC");
+    res.json(rows);
+  } catch (err) { res.status(500).json(err); }
+});
+
+app.post("/ideias", async (req, res) => {
+  const { titulo, nicho, descricao } = req.body;
+  try {
+    await pool.query("INSERT INTO ideias (titulo, nicho, descricao, status) VALUES (?, ?, ?, 'pendente')", [titulo, nicho, descricao]);
+    res.status(201).json({ message: "Ideia enviada para análise!" });
+  } catch (err) { res.status(500).json(err); }
+});
+
+// --- NOVAS ROTAS DE ADMINISTRAÇÃO ---
+
+// Busca tudo que está pendente de uma vez
+app.get("/admin/pendentes", async (req, res) => {
+  try {
+    const [projetos] = await pool.query("SELECT * FROM projetos WHERE status = 'pendente' ORDER BY id DESC");
+    const [ideias] = await pool.query("SELECT * FROM ideias WHERE status = 'pendente' ORDER BY id DESC");
+    res.json({ projetos, ideias });
+  } catch (err) { res.status(500).json({ error: "Erro ao buscar pendentes" }); }
+});
+
+// Aprova um item (projeto ou ideia)
+app.patch("/admin/aprovar/:tipo/:id", async (req, res) => {
+  const { tipo, id } = req.params;
+  const tabela = tipo === 'projeto' ? 'projetos' : 'ideias';
+  try {
+    const [result] = await pool.query(`UPDATE ${tabela} SET status = 'aprovado' WHERE id = ?`, [id]);
+    if (result.affectedRows > 0) {
+      res.json({ message: `${tipo === 'projeto' ? 'Projeto' : 'Ideia'} aprovado com sucesso!` });
+    } else {
+      res.status(404).json({ error: "Item não encontrado." });
+    }
+  } catch (err) { res.status(500).json({ error: "Erro ao aprovar item." }); }
+});
+
+// Reutiliza a lógica de exclusão para "reprovar" (deletar) um item
+app.delete("/projetos/:id", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM mensagens WHERE ticket_id IN (SELECT id FROM tickets WHERE projeto_id = ?)", [req.params.id]);
+    await pool.query("DELETE FROM tickets WHERE projeto_id = ?", [req.params.id]);
+    await pool.query("DELETE FROM projetos WHERE id = ?", [req.params.id]);
+    res.json({ message: "Projeto removido!" });
+  } catch (err) { res.status(500).json({ error: "Erro ao excluir" }); }
+});
+
+app.delete("/ideias/:id", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM ideias WHERE id = ?", [req.params.id]);
+    res.json({ message: "Ideia removida!" });
+  } catch (err) { res.status(500).json({ error: "Erro ao excluir" }); }
+});
+
+// --- ROTAS DE AUTENTICAÇÃO, TICKETS E MENSAGENS (MANTIDAS) ---
 app.post("/cadastro", async (req, res) => {
   const { nome, email, senha } = req.body;
   try {
@@ -66,65 +165,6 @@ app.post("/login", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erro no servidor" }); }
 });
 
-// --- ROTAS DE PROJETOS ---
-app.get("/projetos", async (req, res) => {
-  try {
-    const [rows] = await pool.query("SELECT * FROM projetos ORDER BY id DESC");
-    res.json(rows);
-  } catch (err) { res.status(500).json(err); }
-});
-
-app.post("/projetos", async (req, res) => {
-  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone } = req.body;
-  try {
-    await pool.query("INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone) VALUES (?,?,?,?,?,?,?,?,?,?)", 
-    [empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id || 1, email_contato, telefone]);
-    res.status(201).json({ message: "Publicado!" });
-  } catch (err) { res.status(500).json(err); }
-});
-
-// ROTA DE EXCLUSÃO (Agora muito mais simples e confiável)
-app.delete("/projetos/:id", async (req, res) => {
-  const { id } = req.params;
-  try {
-    // Com o CASCADE configurado acima, deletar o projeto já limpa tickets e mensagens automaticamente
-    const [result] = await pool.query("DELETE FROM projetos WHERE id = ?", [id]);
-    
-    if (result.affectedRows > 0) {
-      res.json({ message: "Excluído com sucesso!" });
-    } else {
-      res.status(404).json({ error: "Não encontrado" });
-    }
-  } catch (err) {
-    console.error("Erro ao excluir:", err);
-    res.status(500).json({ error: "Erro interno ao excluir projeto no banco." });
-  }
-});
-
-// --- ROTAS DE IDEIAS ---
-app.get("/ideias", async (req, res) => {
-  try {
-    const [rows] = await pool.query("SELECT * FROM ideias ORDER BY id DESC");
-    res.json(rows);
-  } catch (err) { res.status(500).json(err); }
-});
-
-app.post("/ideias", async (req, res) => {
-  const { titulo, nicho, descricao } = req.body;
-  try {
-    await pool.query("INSERT INTO ideias (titulo, nicho, descricao) VALUES (?, ?, ?)", [titulo, nicho, descricao]);
-    res.status(201).json({ message: "Ideia publicada!" });
-  } catch (err) { res.status(500).json(err); }
-});
-
-app.delete("/ideias/:id", async (req, res) => {
-  try {
-    await pool.query("DELETE FROM ideias WHERE id = ?", [req.params.id]);
-    res.json({ message: "Removida" });
-  } catch (err) { res.status(500).json(err); }
-});
-
-// --- TICKETS E MENSAGENS ---
 app.post("/tickets", async (req, res) => {
   const { projeto_id, cliente_id } = req.body;
   try {
@@ -159,5 +199,5 @@ app.get("/tickets/:id/mensagens", async (req, res) => {
 
 const port = process.env.PORT || 10000;
 app.listen(port, '0.0.0.0', () => {
-  console.log(`🚀 CoNexo rodando na porta ${port}`);
+  console.log(`🚀 CoNexo Moderação rodando na porta ${port}`);
 });
