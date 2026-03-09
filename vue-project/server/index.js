@@ -7,7 +7,6 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Configuração da Pool de Conexão com o Aiven
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -20,12 +19,9 @@ const pool = mysql.createPool({
   queueLimit: 0
 }).promise();
 
-// --- INICIALIZAÇÃO E SINCRONIZAÇÃO DO BANCO ---
 const inicializarBanco = async () => {
   try {
     console.log("🚀 Sincronizando Central de Mediação e Tabelas...");
-
-    // 1. Tabela de Usuários (Garante coluna nivel para Admin)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -37,7 +33,6 @@ const inicializarBanco = async () => {
     `);
     await pool.query("ALTER TABLE usuarios MODIFY COLUMN nivel VARCHAR(50) DEFAULT 'cliente'");
 
-    // 2. Tabela de Projetos
     await pool.query(`
       CREATE TABLE IF NOT EXISTS projetos (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -54,7 +49,6 @@ const inicializarBanco = async () => {
       )
     `);
 
-    // 3. Tabela de Ideias
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ideias (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -65,7 +59,6 @@ const inicializarBanco = async () => {
       )
     `);
 
-    // 4. Tabela de Tickets (Salas de conversa para intermediação)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tickets (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -76,7 +69,6 @@ const inicializarBanco = async () => {
       )
     `);
 
-    // 5. Tabela de Mensagens
     await pool.query(`
       CREATE TABLE IF NOT EXISTS mensagens (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -117,7 +109,7 @@ app.post("/login", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erro no servidor" }); }
 });
 
-// --- ROTAS DE PROJETOS E IDEIAS ---
+// --- ROTAS DE PROJETOS ---
 app.get("/projetos", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM projetos ORDER BY id DESC");
@@ -136,6 +128,22 @@ app.post("/projetos", async (req, res) => {
   } catch (err) { res.status(500).json(err); }
 });
 
+// NOVA: Rota de Exclusão de Projeto
+app.delete("/projetos/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Opcional: Deletar mensagens e tickets vinculados a este projeto primeiro para evitar erros de chave estrangeira
+    await pool.query("DELETE FROM mensagens WHERE ticket_id IN (SELECT id FROM tickets WHERE projeto_id = ?)", [id]);
+    await pool.query("DELETE FROM tickets WHERE projeto_id = ?", [id]);
+    
+    await pool.query("DELETE FROM projetos WHERE id = ?", [id]);
+    res.json({ message: "Projeto e dados vinculados removidos!" });
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao excluir projeto" });
+  }
+});
+
+// --- ROTAS DE IDEIAS ---
 app.get("/ideias", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM ideias ORDER BY id DESC");
@@ -143,21 +151,36 @@ app.get("/ideias", async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Erro ao buscar ideias" }); }
 });
 
-// --- ROTAS DE INTERMEDIAÇÃO (ADMIN & TICKETS) ---
+app.post("/ideias", async (req, res) => {
+    const { titulo, nicho, descricao } = req.body;
+    try {
+      await pool.query("INSERT INTO ideias (titulo, nicho, descricao) VALUES (?, ?, ?)", [titulo, nicho, descricao]);
+      res.status(201).json({ message: "Ideia publicada!" });
+    } catch (err) { res.status(500).json(err); }
+});
 
-// Abrir ou recuperar ticket de conversa
+// NOVA: Rota de Exclusão de Ideia
+app.delete("/ideias/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM ideias WHERE id = ?", [id]);
+    res.json({ message: "Ideia removida com sucesso!" });
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao excluir ideia" });
+  }
+});
+
+// --- ROTAS DE INTERMEDIAÇÃO ---
 app.post("/tickets", async (req, res) => {
   const { projeto_id, cliente_id } = req.body;
   try {
     const [existente] = await pool.query("SELECT id FROM tickets WHERE projeto_id = ? AND cliente_id = ?", [projeto_id, cliente_id]);
     if (existente.length > 0) return res.json({ ticketId: existente[0].id });
-
     const [result] = await pool.query("INSERT INTO tickets (projeto_id, cliente_id) VALUES (?, ?)", [projeto_id, cliente_id]);
     res.status(201).json({ ticketId: result.insertId });
   } catch (err) { res.status(500).json(err); }
 });
 
-// Enviar mensagem no ticket
 app.post("/mensagens", async (req, res) => {
   const { ticket_id, remetente_id, conteudo } = req.body;
   try {
@@ -166,7 +189,6 @@ app.post("/mensagens", async (req, res) => {
   } catch (err) { res.status(500).json(err); }
 });
 
-// Listar tickets (Apenas para Admin)
 app.get("/admin/tickets", async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -180,7 +202,6 @@ app.get("/admin/tickets", async (req, res) => {
   } catch (err) { res.status(500).json(err); }
 });
 
-// Ver mensagens de um ticket
 app.get("/tickets/:id/mensagens", async (req, res) => {
   try {
     const [rows] = await pool.query(`
