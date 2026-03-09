@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Configuração do Pool de Conexão
+// Configuração do Pool de Conexão com Suporte a Promises
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -20,10 +20,10 @@ const pool = mysql.createPool({
   queueLimit: 0
 }).promise();
 
-// Inicialização das Tabelas
+// Inicialização das Tabelas e Verificação do Banco
 const inicializarBanco = async () => {
   try {
-    console.log("🚀 Sincronizando Central de Mediação e Tabelas...");
+    console.log("🚀 Sincronizando Tabelas CoNexo...");
     
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
@@ -81,9 +81,9 @@ const inicializarBanco = async () => {
       )
     `);
 
-    console.log("✅ Sistema CoNexo totalmente sincronizado!");
+    console.log("✅ Banco de Dados Pronto para Operação!");
   } catch (err) {
-    console.error("❌ Erro na inicialização do banco:", err.message);
+    console.error("❌ Erro na inicialização:", err.message);
   }
 };
 inicializarBanco();
@@ -96,9 +96,9 @@ app.post("/cadastro", async (req, res) => {
       "INSERT INTO usuarios (nome, email, senha, nivel) VALUES (?, ?, ?, 'cliente')",
       [nome, email, senha]
     );
-    res.status(201).json({ message: "Cadastro realizado com sucesso!" });
+    res.status(201).json({ message: "Usuário cadastrado!" });
   } catch (err) {
-    res.status(500).json({ error: err.sqlMessage || "Erro no cadastro" });
+    res.status(500).json({ error: "E-mail já cadastrado ou erro no banco." });
   }
 });
 
@@ -107,8 +107,8 @@ app.post("/login", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM usuarios WHERE email = ? AND senha = ?", [email, senha]);
     if (rows.length > 0) res.json(rows[0]);
-    else res.status(401).json({ message: "Credenciais inválidas" });
-  } catch (err) { res.status(500).json({ error: "Erro no servidor" }); }
+    else res.status(401).json({ message: "Usuário ou senha incorretos." });
+  } catch (err) { res.status(500).json({ error: "Erro interno no servidor." }); }
 });
 
 // --- ROTAS DE PROJETOS ---
@@ -130,32 +130,30 @@ app.post("/projetos", async (req, res) => {
   } catch (err) { res.status(500).json(err); }
 });
 
-// Rota de Exclusão de Projeto (Com Limpeza de Dados Vinculados)
+// ROTA CRÍTICA: Exclusão em Cascata (Resolvendo o Erro 500)
 app.delete("/projetos/:id", async (req, res) => {
   const { id } = req.params;
   try {
-    console.log(`🗑️ Tentando excluir projeto ID: ${id}`);
-    
-    // 1. Deletar mensagens vinculadas aos tickets desse projeto
+    // 1. Apaga mensagens dos tickets vinculados a este projeto
     await pool.query(`
       DELETE FROM mensagens 
       WHERE ticket_id IN (SELECT id FROM tickets WHERE projeto_id = ?)
     `, [id]);
     
-    // 2. Deletar os tickets vinculados
+    // 2. Apaga os tickets do projeto
     await pool.query("DELETE FROM tickets WHERE projeto_id = ?", [id]);
     
-    // 3. Deletar o projeto
+    // 3. Finalmente apaga o projeto
     const [result] = await pool.query("DELETE FROM projetos WHERE id = ?", [id]);
-    
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Projeto não encontrado" });
-    }
 
-    res.json({ message: "Projeto e dados vinculados removidos com sucesso!" });
+    if (result.affectedRows > 0) {
+      res.json({ message: "Projeto e histórico excluídos com sucesso!" });
+    } else {
+      res.status(404).json({ error: "Projeto não encontrado." });
+    }
   } catch (err) {
-    console.error("❌ Erro ao excluir projeto:", err);
-    res.status(500).json({ error: "Erro interno ao excluir projeto", details: err.message });
+    console.error("Erro ao deletar projeto:", err);
+    res.status(500).json({ error: "Erro interno ao excluir projeto no banco." });
   }
 });
 
@@ -164,7 +162,7 @@ app.get("/ideias", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM ideias ORDER BY id DESC");
     res.json(rows);
-  } catch (err) { res.status(500).json({ error: "Erro ao buscar ideias" }); }
+  } catch (err) { res.status(500).json({ error: "Erro ao buscar ideias." }); }
 });
 
 app.post("/ideias", async (req, res) => {
@@ -179,13 +177,13 @@ app.delete("/ideias/:id", async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query("DELETE FROM ideias WHERE id = ?", [id]);
-    res.json({ message: "Ideia removida com sucesso!" });
+    res.json({ message: "Ideia removida." });
   } catch (err) {
-    res.status(500).json({ error: "Erro ao excluir ideia" });
+    res.status(500).json({ error: "Erro ao excluir ideia." });
   }
 });
 
-// --- ROTAS DE INTERMEDIAÇÃO ---
+// --- ROTAS DE TICKETS E CHAT ---
 app.post("/tickets", async (req, res) => {
   const { projeto_id, cliente_id } = req.body;
   try {
@@ -200,7 +198,7 @@ app.post("/mensagens", async (req, res) => {
   const { ticket_id, remetente_id, conteudo } = req.body;
   try {
     await pool.query("INSERT INTO mensagens (ticket_id, remetente_id, conteudo) VALUES (?, ?, ?)", [ticket_id, remetente_id, conteudo]);
-    res.status(201).json({ message: "Mensagem enviada" });
+    res.status(201).json({ message: "Mensagem enviada." });
   } catch (err) { res.status(500).json(err); }
 });
 
@@ -230,6 +228,7 @@ app.get("/tickets/:id/mensagens", async (req, res) => {
   } catch (err) { res.status(500).json(err); }
 });
 
+// Inicialização do Servidor
 const port = process.env.PORT || 10000;
 app.listen(port, '0.0.0.0', () => {
   console.log(`🚀 CoNexo Central Mediação rodando na porta ${port}`);
