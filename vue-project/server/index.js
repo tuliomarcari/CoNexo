@@ -7,6 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Configuração do Pool de Conexão
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -19,9 +20,11 @@ const pool = mysql.createPool({
   queueLimit: 0
 }).promise();
 
+// Inicialização das Tabelas
 const inicializarBanco = async () => {
   try {
     console.log("🚀 Sincronizando Central de Mediação e Tabelas...");
+    
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -31,7 +34,6 @@ const inicializarBanco = async () => {
         nivel VARCHAR(50) DEFAULT 'cliente'
       )
     `);
-    await pool.query("ALTER TABLE usuarios MODIFY COLUMN nivel VARCHAR(50) DEFAULT 'cliente'");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS projetos (
@@ -128,18 +130,32 @@ app.post("/projetos", async (req, res) => {
   } catch (err) { res.status(500).json(err); }
 });
 
-// NOVA: Rota de Exclusão de Projeto
+// Rota de Exclusão de Projeto (Com Limpeza de Dados Vinculados)
 app.delete("/projetos/:id", async (req, res) => {
+  const { id } = req.params;
   try {
-    const { id } = req.params;
-    // Opcional: Deletar mensagens e tickets vinculados a este projeto primeiro para evitar erros de chave estrangeira
-    await pool.query("DELETE FROM mensagens WHERE ticket_id IN (SELECT id FROM tickets WHERE projeto_id = ?)", [id]);
+    console.log(`🗑️ Tentando excluir projeto ID: ${id}`);
+    
+    // 1. Deletar mensagens vinculadas aos tickets desse projeto
+    await pool.query(`
+      DELETE FROM mensagens 
+      WHERE ticket_id IN (SELECT id FROM tickets WHERE projeto_id = ?)
+    `, [id]);
+    
+    // 2. Deletar os tickets vinculados
     await pool.query("DELETE FROM tickets WHERE projeto_id = ?", [id]);
     
-    await pool.query("DELETE FROM projetos WHERE id = ?", [id]);
-    res.json({ message: "Projeto e dados vinculados removidos!" });
+    // 3. Deletar o projeto
+    const [result] = await pool.query("DELETE FROM projetos WHERE id = ?", [id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Projeto não encontrado" });
+    }
+
+    res.json({ message: "Projeto e dados vinculados removidos com sucesso!" });
   } catch (err) {
-    res.status(500).json({ error: "Erro ao excluir projeto" });
+    console.error("❌ Erro ao excluir projeto:", err);
+    res.status(500).json({ error: "Erro interno ao excluir projeto", details: err.message });
   }
 });
 
@@ -159,7 +175,6 @@ app.post("/ideias", async (req, res) => {
     } catch (err) { res.status(500).json(err); }
 });
 
-// NOVA: Rota de Exclusão de Ideia
 app.delete("/ideias/:id", async (req, res) => {
   try {
     const { id } = req.params;
