@@ -5,6 +5,7 @@ import PublicarProjeto from './components/Publicarprojeto.vue';
 import Ideias from './components/Ideias.vue';
 import Login from './components/Login.vue';
 import Cadastro from './components/Cadastro.vue';
+import AdminPainel from './views/AdminPainel.vue'; // <-- Importando o seu Painel
 
 // --- ESTADOS GLOBAIS ---
 const paginaAtual = ref('home');
@@ -32,6 +33,7 @@ const carregarDados = async () => {
 // --- AUTENTICAÇÃO ---
 const confirmarLogin = (dados) => {
   usuarioLogado.value = dados;
+  // Se for admin, podemos sugerir ir direto para o painel ou manter na home
   paginaAtual.value = 'home';
 };
 
@@ -83,15 +85,11 @@ const deletarItem = async (tipo, id) => {
 
     if (res.ok) {
       alert("Excluído com sucesso!");
-      
-      // Atualiza a lista local para sumir da tela instantaneamente
       if (tipo === 'projeto') {
         listaProjetos.value = listaProjetos.value.filter(p => p.id !== id);
       } else {
         listaIdeias.value = listaIdeias.value.filter(i => i.id !== id);
       }
-      
-      // Sincroniza com o banco por segurança
       await carregarDados();
     } else {
       const erro = await res.json();
@@ -114,8 +112,17 @@ onMounted(carregarDados);
         
         <nav class="nav-center">
           <a @click="paginaAtual = 'home'" :class="{ active: paginaAtual === 'home' }">Home</a>
-          <a @click="paginaAtual = 'publicar'" :class="{ active: paginaAtual === 'publicar' || paginaAtual === 'projetos' }">Projetos</a>
+          <a @click="paginaAtual = 'publicar'" :class="{ active: paginaAtual === 'publicar' }">Projetos</a>
           <a @click="paginaAtual = 'ideias'" :class="{ active: paginaAtual === 'ideias' }">Ideias</a>
+          
+          <a 
+            v-if="usuarioLogado && usuarioLogado.nivel === 'admin'" 
+            @click="paginaAtual = 'admin'" 
+            :class="{ active: paginaAtual === 'admin' }"
+            class="nav-admin"
+          >
+            🛠️ Painel Admin
+          </a>
         </nav>
         
         <div class="nav-right">
@@ -148,7 +155,7 @@ onMounted(carregarDados);
       />
 
       <PublicarProjeto 
-        v-if="paginaAtual === 'publicar' || paginaAtual === 'projetos'" 
+        v-if="paginaAtual === 'publicar'" 
         :projetos="listaProjetos" 
         :user="usuarioLogado"
         @salvar="adicionarProjeto"
@@ -161,6 +168,10 @@ onMounted(carregarDados);
         :user="usuarioLogado"
         @nova-ideia="adicionarIdeia"
         @excluir="id => deletarItem('ideia', id)"
+      />
+
+      <AdminPainel 
+        v-if="paginaAtual === 'admin'" 
       />
     </main>
   </div>
@@ -225,6 +236,18 @@ body {
 .nav-center a.active { 
   color: var(--primary); 
   border-bottom: 2px solid var(--primary); 
+}
+
+/* Estilo especial para o link admin */
+.nav-admin {
+  background: rgba(16, 185, 129, 0.1);
+  padding: 5px 12px !important;
+  border-radius: 6px;
+  color: var(--primary) !important;
+}
+.nav-admin:hover {
+  background: var(--primary);
+  color: var(--dark) !important;
 }
 
 .nav-right { display: flex; align-items: center; gap: 15px; }
