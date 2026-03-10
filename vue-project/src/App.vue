@@ -5,7 +5,7 @@ import PublicarProjeto from './components/Publicarprojeto.vue';
 import Ideias from './components/Ideias.vue';
 import Login from './components/Login.vue';
 import Cadastro from './components/Cadastro.vue';
-import AdminPainel from './views/AdminPainel.vue'; // <-- Importando o seu Painel
+import AdminPainel from './components/AdminPainel.vue'; // <-- Importando o seu Painel
 
 // --- ESTADOS GLOBAIS ---
 const paginaAtual = ref('home');
