@@ -106,9 +106,19 @@ const novo = ref({
 });
 
 const enviarProjeto = () => {
-  emit('salvar', { ...novo.value, usuario_id: props.user?.id });
-  // Limpar campos
+  // Criamos o objeto incluindo o status 'pendente' para o Admin visualizar
+  const projetoFinal = { 
+    ...novo.value, 
+    usuario_id: props.user?.id,
+    status: 'pendente' 
+  };
+
+  emit('salvar', projetoFinal);
+
+  // Limpar campos do formulário
   Object.keys(novo.value).forEach(key => novo.value[key] = '');
+  
+  alert("Projeto enviado com sucesso! Ele aparecerá na lista assim que o administrador aprová-lo.");
 };
 
 const abrirContato = (projeto) => {
@@ -131,13 +141,11 @@ const abrirContato = (projeto) => {
 
 .main-layout { display: flex; gap: 40px; align-items: flex-start; }
 
-/* Cards e Inputs Estilizados */
 .cx-card { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; border: 1px solid #f1f5f9; }
 .cx-input { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; }
 .cx-input:focus { border-color: #10b981; outline: none; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); }
 .cx-textarea { min-height: 100px; resize: vertical; }
 
-/* Formulário */
 .form-column { flex: 0 0 380px; }
 .form-title { font-size: 1.25rem; margin-bottom: 20px; color: #1e293b; }
 .form-group { margin-bottom: 15px; }
@@ -149,7 +157,6 @@ const abrirContato = (projeto) => {
 .cx-btn-primary { width: 100%; padding: 14px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; }
 .cx-btn-primary:hover { background: #059669; }
 
-/* Lista de Projetos */
 .list-column { flex: 1; }
 .list-title { font-size: 1.25rem; margin-bottom: 25px; color: #1e293b; }
 .project-item { margin-bottom: 20px; }
@@ -167,6 +174,8 @@ const abrirContato = (projeto) => {
 .actions { display: flex; gap: 10px; }
 .btn-conversar { background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; }
 .btn-excluir { background: #fee2e2; color: #ef4444; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+
+.empty-state { text-align: center; color: #64748b; padding: 40px; background: #f8fafc; border-radius: 12px; border: 2px dashed #e2e8f0; }
 
 @media (max-width: 900px) {
   .main-layout { flex-direction: column; }

@@ -5,7 +5,7 @@ import PublicarProjeto from './components/Publicarprojeto.vue';
 import Ideias from './components/Ideias.vue';
 import Login from './components/Login.vue';
 import Cadastro from './components/Cadastro.vue';
-import AdminPainel from './components/AdminPainel.vue'; // <-- Importando o seu Painel
+import AdminPainel from './components/AdminPainel.vue'; 
 
 // --- ESTADOS GLOBAIS ---
 const paginaAtual = ref('home');
@@ -33,25 +33,29 @@ const carregarDados = async () => {
 // --- AUTENTICAÇÃO ---
 const confirmarLogin = (dados) => {
   usuarioLogado.value = dados;
-  // Se for admin, podemos sugerir ir direto para o painel ou manter na home
+  // Salva no localStorage para o AdminPainel conseguir ler o ID do admin
+  localStorage.setItem('usuario', JSON.stringify(dados));
   paginaAtual.value = 'home';
 };
 
 const deslogar = () => {
   usuarioLogado.value = null;
+  localStorage.removeItem('usuario');
   paginaAtual.value = 'login';
 };
 
 // --- ADICIONAR ITENS ---
-const adicionarProjeto = async (novo) => {
+const adicionarProjeto = async (projetoComStatus) => {
   try {
     const res = await fetch('https://conexo-api.onrender.com/projetos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(novo)
+      body: JSON.stringify(projetoComStatus)
     });
+
     if (res.ok) { 
-      await carregarDados(); 
+      // Não recarregamos a Home aqui porque o projeto ainda está PENDENTE
+      alert("Enviado com sucesso! Aguarde a aprovação do administrador no painel.");
       paginaAtual.value = 'home'; 
     }
   } catch (err) {
@@ -85,11 +89,6 @@ const deletarItem = async (tipo, id) => {
 
     if (res.ok) {
       alert("Excluído com sucesso!");
-      if (tipo === 'projeto') {
-        listaProjetos.value = listaProjetos.value.filter(p => p.id !== id);
-      } else {
-        listaIdeias.value = listaIdeias.value.filter(i => i.id !== id);
-      }
       await carregarDados();
     } else {
       const erro = await res.json();
@@ -192,7 +191,6 @@ body {
   color: #1e293b; 
 }
 
-/* NAVBAR */
 .navbar { 
   background: var(--dark); 
   height: 70px; 
@@ -238,16 +236,11 @@ body {
   border-bottom: 2px solid var(--primary); 
 }
 
-/* Estilo especial para o link admin */
 .nav-admin {
   background: rgba(16, 185, 129, 0.1);
   padding: 5px 12px !important;
   border-radius: 6px;
   color: var(--primary) !important;
-}
-.nav-admin:hover {
-  background: var(--primary);
-  color: var(--dark) !important;
 }
 
 .nav-right { display: flex; align-items: center; gap: 15px; }
@@ -288,7 +281,6 @@ body {
   font-weight: bold; 
   transition: 0.2s;
 }
-.btn-login-nav:hover { background: #059669; transform: translateY(-1px); }
 
 .main-content { padding-top: 70px; min-height: 100vh; }
 
