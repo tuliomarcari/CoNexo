@@ -1,230 +1,152 @@
 <template>
-  <div class="admin-container">
-    <aside class="sidebar">
-      <div class="logo-area">
-        <h1 class="logo-text">CoNexo <span>Admin</span></h1>
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <div class="admin-brand">
+        CoNexo <span>ADMIN</span>
       </div>
-
-      <div class="admin-tabs">
+      
+      <nav class="admin-nav">
         <button 
-          :class="{ active: abaAtiva === 'tickets' }" 
-          @click="abaAtiva = 'tickets'"
+          @click="abaAtiva = 'negociacoes'" 
+          :class="{ active: abaAtiva === 'negociacoes' }"
+          class="nav-item"
         >
           📂 Negociações
         </button>
         <button 
-          :class="{ active: abaAtiva === 'pendentes' }" 
-          @click="abaAtiva = 'pendentes'; carregarPendentes()"
+          @click="abaAtiva = 'pendentes'" 
+          :class="{ active: abaAtiva === 'pendentes' }"
+          class="nav-item badge-parent"
         >
-          ⏳ Pendentes <span v-if="totalPendentes > 0" class="badge">{{ totalPendentes }}</span>
+          ⏳ Pendentes
+          <span v-if="pendentes.length > 0" class="badge-count">{{ pendentes.length }}</span>
         </button>
-      </div>
-
-      <hr class="divider" />
-
-      <div v-if="abaAtiva === 'tickets'" class="list-section">
-        <h2 class="section-title">Negociações Ativas</h2>
-        <div 
-          v-for="ticket in tickets" :key="ticket.id" 
-          @click="selecionarTicket(ticket)"
-          :class="['card-item', { active: ticketSelecionado?.id === ticket.id }]"
-        >
-          <p class="card-empresa">{{ ticket.empresa }}</p>
-          <p class="card-user">Interessado: {{ ticket.nome_cliente }}</p>
-        </div>
-        <p v-if="tickets.length === 0" class="empty-msg">Nenhuma negociação encontrada.</p>
-      </div>
-
-      <div v-else class="list-section">
-        <h2 class="section-title">Aguardando Aprovação</h2>
-        
-        <div v-if="pendentes.projetos.length > 0">
-          <h3 class="sub-title">Projetos</h3>
-          <div v-for="p in pendentes.projetos" :key="p.id" class="pendente-card">
-            <p><strong>{{ p.empresa }}</strong></p>
-            <button @click="aprovarItem('projeto', p.id)" class="btn-aprovar">✅ Aprovar Projeto</button>
-          </div>
-        </div>
-
-        <div v-if="pendentes.ideias.length > 0" class="mt-20">
-          <h3 class="sub-title">Ideias</h3>
-          <div v-for="i in pendentes.ideias" :key="i.id" class="pendente-card ideia">
-            <p><strong>{{ i.titulo }}</strong></p>
-            <button @click="aprovarItem('ideia', i.id)" class="btn-aprovar">✅ Aprovar Ideia</button>
-          </div>
-        </div>
-
-        <p v-if="totalPendentes === 0" class="empty-msg">Nenhum item pendente no momento.</p>
-      </div>
+      </nav>
     </aside>
 
-    <main class="chat-area">
-      <div v-if="ticketSelecionado && abaAtiva === 'tickets'" class="chat-wrapper">
-        <header class="chat-header">
-          <h3>Chat de Mediação: {{ ticketSelecionado.empresa }}</h3>
-          <span>Envolvidos: Admin, Proprietário e {{ ticketSelecionado.nome_cliente }}</span>
-        </header>
+    <main class="admin-main">
+      <section v-if="abaAtiva === 'pendentes'" class="admin-section">
+        <h2 class="section-title">Aguardando Aprovação</h2>
         
-        <div class="messages-list" ref="scrollContainer">
-          <div v-for="msg in mensagens" :key="msg.id" :class="['msg-bubble', msg.nivel]">
-            <small>{{ msg.nome_remetente }}</small>
-            <p>{{ msg.conteudo }}</p>
-          </div>
+        <div v-if="pendentes.length === 0" class="empty-state">
+          Nenhum item pendente no momento.
         </div>
 
-        <div class="chat-input">
-          <input 
-            v-model="novaMensagem" 
-            @keyup.enter="enviarMensagem" 
-            placeholder="Digite sua mensagem de mediação..." 
-          />
-          <button @click="enviarMensagem">Enviar</button>
+        <div class="grid-pendentes">
+          <div v-for="item in pendentes" :key="item.id" class="pendente-card">
+            <div class="card-header">
+              <span class="tag-nicho">{{ item.nicho }}</span>
+              <span class="tag-data">📍 {{ item.cidade }}/{{ item.estado }}</span>
+            </div>
+            
+            <h3 class="card-empresa">{{ item.empresa }}</h3>
+            <p class="card-desc">{{ item.descricao }}</p>
+            
+            <div class="card-financeiro">
+              <span><strong>Valor:</strong> R$ {{ Number(item.valor).toLocaleString() }}</span>
+              <span><strong>Equity:</strong> {{ item.porcentagem }}%</span>
+            </div>
+
+            <div class="card-actions">
+              <button @click="aprovar(item.id)" class="btn-aprovar">✅ Aprovar</button>
+              <button @click="rejeitar(item.id)" class="btn-rejeitar">❌ Rejeitar</button>
+            </div>
+          </div>
         </div>
-      </div>
-      
-      <div v-else class="no-selection">
-        <div class="placeholder-content">
-          <p>Selecione uma negociação à esquerda para ver o histórico de mensagens ou gerencie os itens pendentes.</p>
-        </div>
-      </div>
+      </section>
+
+      <section v-if="abaAtiva === 'negociacoes'" class="admin-section">
+        <h2 class="section-title">Histórico de Negociações</h2>
+        <p class="empty-text">Selecione uma negociação à esquerda para ver o histórico ou gerencie os itens pendentes.</p>
+      </section>
     </main>
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-const API = 'https://conexo-api.onrender.com';
+<script setup>
+import { ref, onMounted } from 'vue';
+import axios from 'axios'; // Importação essencial que estava faltando no build
 
-export default {
-  data() {
-    return {
-      abaAtiva: 'tickets',
-      tickets: [],
-      pendentes: { projetos: [], ideias: [] },
-      ticketSelecionado: null,
-      mensagens: [],
-      novaMensagem: '',
-      usuarioLogado: JSON.parse(localStorage.getItem('usuario'))
-    };
-  },
-  computed: {
-    totalPendentes() {
-      return (this.pendentes.projetos?.length || 0) + (this.pendentes.ideias?.length || 0);
-    }
-  },
-  methods: {
-    async carregarTickets() {
-      try {
-        const res = await axios.get(`${API}/admin/tickets`);
-        this.tickets = res.data;
-      } catch (err) { console.error("Erro ao carregar tickets:", err); }
-    },
-    async carregarPendentes() {
-      try {
-        const res = await axios.get(`${API}/admin/pendentes`);
-        this.pendentes = res.data;
-      } catch (err) { console.error("Erro ao carregar pendentes:", err); }
-    },
-    async selecionarTicket(t) {
-      this.ticketSelecionado = t;
-      try {
-        const res = await axios.get(`${API}/tickets/${t.id}/mensagens`);
-        this.mensagens = res.data;
-        this.$nextTick(() => this.scrollToBottom());
-      } catch (err) { console.error(err); }
-    },
-    async aprovarItem(tipo, id) {
-      try {
-        await axios.patch(`${API}/admin/aprovar/${tipo}/${id}`);
-        alert("Item aprovado com sucesso!");
-        this.carregarPendentes();
-      } catch (err) { alert("Erro ao aprovar item."); }
-    },
-    async enviarMensagem() {
-      if (!this.novaMensagem.trim()) return;
-      try {
-        const payload = {
-          ticket_id: this.ticketSelecionado.id,
-          remetente_id: this.usuarioLogado.id,
-          conteudo: this.novaMensagem
-        };
-        await axios.post(`${API}/mensagens`, payload);
-        this.mensagens.push({ 
-          conteudo: this.novaMensagem, 
-          nivel: 'admin', 
-          nome_remetente: 'Você (Admin)' 
-        });
-        this.novaMensagem = '';
-        this.$nextTick(() => this.scrollToBottom());
-      } catch (err) { alert("Erro ao enviar mensagem."); }
-    },
-    scrollToBottom() {
-      const container = this.$refs.scrollContainer;
-      if (container) container.scrollTop = container.scrollHeight;
-    }
-  },
-  mounted() {
-    this.carregarTickets();
-    this.carregarPendentes();
+const API = 'https://conexo-api.onrender.com';
+const abaAtiva = ref('pendentes');
+const pendentes = ref([]);
+
+// Busca projetos com status 'pendente'
+const carregarPendentes = async () => {
+  try {
+    const res = await axios.get(`${API}/admin/pendentes`);
+    pendentes.value = res.data;
+  } catch (err) {
+    console.error("Erro ao buscar pendentes:", err);
   }
 };
+
+const aprovar = async (id) => {
+  if (!confirm("Confirmar aprovação deste projeto?")) return;
+  try {
+    // Rota que muda o status de 'pendente' para 'aprovado'
+    await axios.put(`${API}/admin/aprovar/${id}`);
+    alert("Projeto aprovado e publicado na Home!");
+    await carregarPendentes();
+  } catch (err) {
+    alert("Erro ao aprovar projeto.");
+  }
+};
+
+const rejeitar = async (id) => {
+  if (!confirm("Deseja realmente rejeitar/excluir este projeto?")) return;
+  try {
+    await axios.delete(`${API}/projetos/${id}`);
+    alert("Projeto removido.");
+    await carregarPendentes();
+  } catch (err) {
+    alert("Erro ao rejeitar.");
+  }
+};
+
+onMounted(() => {
+  carregarPendentes();
+});
 </script>
 
 <style scoped>
-.admin-container { 
-  display: flex; 
-  height: 100vh; 
-  background: #0b0e11; 
-  color: white;
+.admin-layout { display: flex; min-height: 100vh; background: #0b0f1a; color: white; }
+
+/* Sidebar */
+.admin-sidebar { width: 260px; background: #161b22; border-right: 1px solid #30363d; padding: 20px; }
+.admin-brand { font-size: 1.4rem; font-weight: 800; color: #10b981; margin-bottom: 40px; }
+.admin-brand span { font-size: 0.7rem; color: #8b949e; margin-left: 5px; border: 1px solid #30363d; padding: 2px 5px; border-radius: 4px; }
+
+.admin-nav { display: flex; flex-direction: column; gap: 10px; }
+.nav-item { 
+  background: transparent; border: none; color: #8b949e; text-align: left; 
+  padding: 12px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s;
 }
+.nav-item:hover { background: #21262d; color: white; }
+.nav-item.active { background: #10b981; color: #0b0f1a; }
 
-.sidebar { 
-  width: 350px; 
-  background: #14171a; 
-  border-right: 1px solid #333; 
-  display: flex; 
-  flex-direction: column; 
-  padding: 20px;
-}
+.badge-parent { display: flex; justify-content: space-between; align-items: center; }
+.badge-count { background: #ef4444; color: white; font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; }
 
-.logo-text { font-size: 24px; font-weight: bold; color: #00c896; margin-bottom: 5px; }
-.logo-text span { color: #fff; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; }
+/* Conteúdo Principal */
+.admin-main { flex: 1; padding: 40px; }
+.section-title { font-size: 1.8rem; margin-bottom: 30px; }
 
-.admin-tabs { display: flex; gap: 8px; margin: 20px 0; }
-.admin-tabs button { 
-  flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; 
-  background: #262c31; color: #888; font-weight: bold; transition: 0.3s;
-}
-.admin-tabs button.active { background: #00c896; color: #000; }
+.grid-pendentes { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+.pendente-card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; }
 
-.card-item, .pendente-card {
-  background: #1f2327; padding: 15px; border-radius: 8px; margin-bottom: 10px;
-  cursor: pointer; border-left: 4px solid #333; transition: 0.2s;
-}
-.card-item:hover { background: #262c31; }
-.card-item.active { border-left-color: #00c896; background: #262c31; }
+.card-header { display: flex; justify-content: space-between; margin-bottom: 15px; }
+.tag-nicho { background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; }
+.tag-data { color: #8b949e; font-size: 0.8rem; }
 
-.btn-aprovar {
-  margin-top: 10px; width: 100%; padding: 8px; background: #00c896;
-  color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;
-}
+.card-empresa { font-size: 1.2rem; margin-bottom: 10px; }
+.card-desc { color: #8b949e; font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px; }
 
-.badge { background: #ff4d4d; padding: 2px 6px; border-radius: 8px; font-size: 11px; margin-left: 5px; }
+.card-financeiro { display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; font-size: 0.9rem; padding: 10px; background: #0d1117; border-radius: 8px; }
 
-.chat-area { flex: 1; display: flex; flex-direction: column; }
-.chat-wrapper { display: flex; flex-direction: column; height: 100%; }
-.chat-header { padding: 20px; background: #14171a; border-bottom: 1px solid #333; }
+.card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn-aprovar { background: #10b981; color: #0b0f1a; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+.btn-rejeitar { background: transparent; border: 1px solid #ef4444; color: #ef4444; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 
-.messages-list { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
-.msg-bubble { padding: 12px 16px; border-radius: 12px; max-width: 75%; }
-.msg-bubble.admin { align-self: flex-end; background: #00c896; color: #000; }
-.msg-bubble.user { align-self: flex-start; background: #333; color: #fff; }
-
-.chat-input { padding: 20px; display: flex; gap: 10px; background: #14171a; }
-.chat-input input { flex: 1; background: #000; border: 1px solid #333; padding: 12px; border-radius: 6px; color: white; }
-.chat-input button { background: #00c896; border: none; padding: 0 25px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-
-.no-selection { height: 100%; display: flex; align-items: center; justify-content: center; color: #555; text-align: center; padding: 40px; }
-.mt-20 { margin-top: 20px; }
-.divider { border: 0; border-top: 1px solid #333; margin: 10px 0; }
+.empty-state { color: #8b949e; font-style: italic; }
 </style>
