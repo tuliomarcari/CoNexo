@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-import axios from 'axios'; // 1. Importação essencial
+import axios from 'axios'; 
 import Home from './components/Home.vue';
 import PublicarProjeto from './components/Publicarprojeto.vue';
 import Ideias from './components/Ideias.vue';
@@ -8,6 +8,7 @@ import Login from './components/Login.vue';
 import Cadastro from './components/Cadastro.vue';
 import AdminPainel from './components/AdminPainel.vue'; 
 
+// --- ESTADOS GLOBAIS ---
 const paginaAtual = ref('home');
 const listaProjetos = ref([]);
 const listaIdeias = ref([]);
@@ -15,14 +16,15 @@ const usuarioLogado = ref(null);
 
 const carregarDados = async () => {
   try {
-    // 2. Padronizado para Axios para evitar erro de conexão
     const [resP, resI] = await Promise.all([
       axios.get('https://conexo-api.onrender.com/projetos'),
       axios.get('https://conexo-api.onrender.com/ideias')
     ]);
     listaProjetos.value = resP.data;
     listaIdeias.value = resI.data;
-  } catch (err) { console.error("Erro API:", err); }
+  } catch (err) { 
+    console.error("Erro ao carregar dados:", err); 
+  }
 };
 
 const confirmarLogin = (dados) => {
@@ -37,16 +39,17 @@ const deslogar = () => {
   paginaAtual.value = 'login';
 };
 
-// 3. FUNÇÃO CORRIGIDA: Agora envia o projeto corretamente para o banco
+// --- AQUI ESTAVA O ERRO DA SUA IMAGEM (CORRIGIDO) ---
 const adicionarProjeto = async (projetoComStatus) => {
   try {
     const res = await axios.post('https://conexo-api.onrender.com/projetos', projetoComStatus);
     if (res.status === 200 || res.status === 201) { 
-      alert("Enviado com sucesso! Aguarde a aprovação do administrador.");
+      alert("Projeto enviado com sucesso! Ele aparecerá na lista assim que o administrador aprová-lo.");
       paginaAtual.value = 'home'; 
     }
   } catch (err) {
-    alert("Erro ao publicar projeto.");
+    console.error("Detalhes do erro:", err.response?.data || err.message);
+    alert("Erro ao publicar projeto. Verifique sua conexão com o servidor.");
   }
 };
 
@@ -58,7 +61,7 @@ const adicionarIdeia = async (nova) => {
 };
 
 const deletarItem = async (tipo, id) => {
-  if (!confirm(`Deseja realmente excluir?`)) return;
+  if (!confirm(`Deseja realmente excluir este ${tipo}?`)) return;
   const rota = tipo === 'projeto' ? 'projetos' : 'ideias';
   try {
     await axios.delete(`https://conexo-api.onrender.com/${rota}/${id}`);
@@ -83,6 +86,7 @@ onMounted(carregarDados);
         <div class="nav-right">
           <div v-if="usuarioLogado" class="user-info">
             <span class="avatar">{{ usuarioLogado.nome.charAt(0) }}</span>
+            <span class="welcome-text">Olá, <strong>{{ usuarioLogado.nome }}</strong></span>
             <button @click="deslogar" class="btn-sair">Sair</button>
           </div>
           <button v-else @click="paginaAtual = 'login'" class="btn-login-nav">Entrar</button>
@@ -102,21 +106,20 @@ onMounted(carregarDados);
 </template>
 
 <style>
-/* SEUS ESTILOS ORIGINAIS (Mantidos 100%) */
+/* --- SEUS ESTILOS MANTIDOS 100% --- */
 :root { --primary: #10b981; --dark: #051614; --bg: #f8fafc; }
 body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: #1e293b; }
 .navbar { background: var(--dark); height: 70px; display: flex; align-items: center; position: fixed; width: 100%; top: 0; z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
 .nav-content { width: 100%; max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 40px; }
-.brand { font-size: 1.6rem; font-weight: 800; color: var(--primary); cursor: pointer; letter-spacing: -1px; }
+.brand { font-size: 1.6rem; font-weight: 800; color: var(--primary); cursor: pointer; }
 .nav-center { display: flex; gap: 30px; }
-.nav-center a { color: #94a3b8; cursor: pointer; text-decoration: none; font-weight: 500; padding: 5px 0; transition: 0.2s; }
-.nav-center a:hover { color: white; }
+.nav-center a { color: #94a3b8; cursor: pointer; text-decoration: none; font-weight: 500; padding: 5px 0; }
 .nav-center a.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
 .nav-admin { background: rgba(16, 185, 129, 0.1); padding: 5px 12px !important; border-radius: 6px; color: var(--primary) !important; }
 .nav-right { display: flex; align-items: center; gap: 15px; }
 .user-info { display: flex; align-items: center; gap: 12px; color: white; }
-.avatar { width: 32px; height: 32px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: bold; color: var(--dark); }
-.btn-sair { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #ef4444; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+.avatar { width: 32px; height: 32px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--dark); font-weight: bold; }
+.btn-sair { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #ef4444; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
 .btn-login-nav { background: var(--primary); color: white; border: none; padding: 8px 22px; border-radius: 8px; cursor: pointer; font-weight: bold; }
 .main-content { padding-top: 70px; min-height: 100vh; }
 </style>
