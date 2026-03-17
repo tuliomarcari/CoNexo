@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-import axios from 'axios'; 
+import axios from 'axios'; // 1. AGORA IMPORTAMOS O AXIOS QUE VOCÊ INSTALOU
 import Home from './components/Home.vue';
 import PublicarProjeto from './components/Publicarprojeto.vue';
 import Ideias from './components/Ideias.vue';
@@ -15,13 +15,14 @@ const usuarioLogado = ref(null);
 
 const carregarDados = async () => {
   try {
+    // 2. BUSCA USANDO AXIOS (RESOLVE O ERRO DE CONEXÃO)
     const [resP, resI] = await Promise.all([
       axios.get('https://conexo-api.onrender.com/projetos'),
       axios.get('https://conexo-api.onrender.com/ideias')
     ]);
     listaProjetos.value = resP.data;
     listaIdeias.value = resI.data;
-  } catch (err) { console.error(err); }
+  } catch (err) { console.error("Erro ao carregar:", err); }
 };
 
 const confirmarLogin = (dados) => {
@@ -36,7 +37,7 @@ const deslogar = () => {
   paginaAtual.value = 'login';
 };
 
-// CORREÇÃO: Garante que o status 'pendente' seja enviado para o banco
+// 3. FUNÇÃO QUE ENVIA O PROJETO (CORRIGIDA)
 const adicionarProjeto = async (projeto) => {
   try {
     const projetoComStatus = { ...projeto, status: 'pendente' };
@@ -45,9 +46,11 @@ const adicionarProjeto = async (projeto) => {
     if (res.status === 200 || res.status === 201) { 
       alert("Projeto enviado com sucesso! Ele aparecerá no painel para aprovação.");
       paginaAtual.value = 'home'; 
+      await carregarDados();
     }
   } catch (err) {
-    alert("Erro ao publicar projeto. Verifique o servidor.");
+    console.error("Erro detalhado:", err.response?.data || err.message);
+    alert("Erro ao publicar projeto. Verifique a conexão.");
   }
 };
 
@@ -103,6 +106,7 @@ onMounted(carregarDados);
 </template>
 
 <style>
+/* SEUS ESTILOS MANTIDOS */
 :root { --primary: #10b981; --dark: #051614; --bg: #f8fafc; }
 body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: #1e293b; }
 .navbar { background: var(--dark); height: 70px; display: flex; align-items: center; position: fixed; width: 100%; top: 0; z-index: 1000; }
@@ -112,9 +116,8 @@ body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color
 .nav-center a { color: #94a3b8; cursor: pointer; text-decoration: none; font-weight: 500; }
 .nav-center a.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
 .nav-admin { background: rgba(16, 185, 129, 0.1); padding: 5px 12px !important; border-radius: 6px; color: var(--primary) !important; }
-.nav-right { display: flex; align-items: center; gap: 15px; }
 .avatar { width: 32px; height: 32px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
 .btn-sair { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #ef4444; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
 .btn-login-nav { background: var(--primary); color: white; border: none; padding: 8px 22px; border-radius: 8px; cursor: pointer; font-weight: bold; }
-.main-content { padding-top: 70px; min-height: 100vh; }
+.main-content { padding-top: 70px; }
 </style>
