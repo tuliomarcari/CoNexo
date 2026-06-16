@@ -32,13 +32,14 @@
 
 <script setup>
 import { ref, onMounted, nextTick, onUnmounted } from 'vue';
+import { API_URL } from '../config';
 const props = defineProps(['projeto', 'usuario']);
 const mensagens = ref([]);
 const novaMsg = ref('');
 const chatWindow = ref(null);
 
 const carregarMensagens = async () => {
-  const res = await fetch(`https://conexo-api.onrender.com/mensagens/${props.projeto.id}/${props.usuario.id}`);
+  const res = await fetch(`${API_URL}/mensagens/${props.projeto.id}/${props.usuario.id}`);
   if (res.ok) {
     mensagens.value = await res.json();
     await nextTick();
@@ -52,7 +53,7 @@ const enviar = async () => {
     projeto_id: props.projeto.id, autor_nome: props.usuario.nome, 
     texto: novaMsg.value, remetente_id: props.usuario.id, destinatario_id: destinatario 
   };
-  await fetch('https://conexo-api.onrender.com/mensagens', {
+  await fetch(`${API_URL}/mensagens`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   });
   novaMsg.value = '';

@@ -30,6 +30,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { API_URL } from '../config';
 
 const props = defineProps(['usuario']);
 const emit = defineEmits(['abrir-chat']);
@@ -39,7 +40,7 @@ const carregarConversas = async () => {
   if (!props.usuario) return;
   
   try {
-    const res = await fetch(`https://conexo-api.onrender.com/minhas-conversas/${props.usuario.id}`);
+    const res = await fetch(`${API_URL}/minhas-conversas/${props.usuario.id}`);
     if (res.ok) {
       conversas.value = await res.json();
     }

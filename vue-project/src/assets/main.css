@@ -1,19 +1,14 @@
-/* src/style.css */
-:root {
-  margin: 0;
-  padding: 0;
-}
+/* ─── main.css — importa tokens e define layout raiz ───────────────────────── */
+@import './base.css';
 
 body {
   margin: 0;
   padding: 0;
-  width: 100vw;
+  width: 100%;
   min-height: 100vh;
-  display: block; /* Importante: remove o flex padrão do Vite */
 }
 
 #app {
   width: 100%;
-  margin: 0;
-  padding: 0;
+  min-height: 100vh;
 }

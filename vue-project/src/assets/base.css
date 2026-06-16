@@ -1,86 +1,137 @@
-/* color palette from <https://github.com/vuejs/theme> */
+/* ─── CoNexo Design System — Base Tokens ───────────────────────────────────── */
+
+/* Importa tipografia profissional do Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
+
 :root {
-  --vt-c-white: #ffffff;
-  --vt-c-white-soft: #f8f8f8;
-  --vt-c-white-mute: #f2f2f2;
+  /* Paleta principal */
+  --cx-primary:        #0d9c6e;
+  --cx-primary-dark:   #087a56;
+  --cx-primary-light:  #e6f7f2;
+  --cx-primary-alpha:  rgba(13, 156, 110, 0.12);
 
-  --vt-c-black: #181818;
-  --vt-c-black-soft: #222222;
-  --vt-c-black-mute: #282828;
+  /* Superfícies — base clara, sofisticada */
+  --cx-bg:             #f7f8fa;
+  --cx-bg-alt:         #eef0f4;
+  --cx-surface:        #ffffff;
+  --cx-surface-raised: #ffffff;
 
-  --vt-c-indigo: #2c3e50;
+  /* Tons escuros para hero e admin */
+  --cx-dark:           #0c1117;
+  --cx-dark-2:         #141b24;
+  --cx-dark-3:         #1c2633;
+  --cx-dark-border:    rgba(255,255,255,0.07);
 
-  --vt-c-divider-light-1: rgba(60, 60, 60, 0.29);
-  --vt-c-divider-light-2: rgba(60, 60, 60, 0.12);
-  --vt-c-divider-dark-1: rgba(84, 84, 84, 0.65);
-  --vt-c-divider-dark-2: rgba(84, 84, 84, 0.48);
+  /* Tipografia */
+  --cx-text:           #1a2332;
+  --cx-text-2:         #3d4f63;
+  --cx-text-muted:     #6b7f96;
+  --cx-text-faint:     #99aabb;
+  --cx-text-inverse:   #f0f4f8;
 
-  --vt-c-text-light-1: var(--vt-c-indigo);
-  --vt-c-text-light-2: rgba(60, 60, 60, 0.66);
-  --vt-c-text-dark-1: var(--vt-c-white);
-  --vt-c-text-dark-2: rgba(235, 235, 235, 0.64);
+  /* Bordas */
+  --cx-border:         #e2e7ef;
+  --cx-border-soft:    #edf0f5;
+
+  /* Tipografia: escala */
+  --cx-font-sans:      'Inter', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --cx-text-xs:        0.75rem;    /* 12px */
+  --cx-text-sm:        0.875rem;   /* 14px */
+  --cx-text-base:      1rem;       /* 16px */
+  --cx-text-lg:        1.125rem;   /* 18px */
+  --cx-text-xl:        1.25rem;    /* 20px */
+  --cx-text-2xl:       1.5rem;     /* 24px */
+  --cx-text-3xl:       2rem;       /* 32px */
+  --cx-text-4xl:       2.75rem;    /* 44px */
+  --cx-text-5xl:       3.5rem;     /* 56px */
+
+  /* Espaçamento */
+  --cx-space-1:        0.25rem;
+  --cx-space-2:        0.5rem;
+  --cx-space-3:        0.75rem;
+  --cx-space-4:        1rem;
+  --cx-space-6:        1.5rem;
+  --cx-space-8:        2rem;
+  --cx-space-12:       3rem;
+  --cx-space-16:       4rem;
+  --cx-space-20:       5rem;
+  --cx-space-24:       6rem;
+
+  /* Container */
+  --cx-container:      1200px;
+  --cx-container-sm:   760px;
+
+  /* Radius */
+  --cx-radius-sm:      4px;
+  --cx-radius-md:      8px;
+  --cx-radius-lg:      12px;
+  --cx-radius-xl:      16px;
+  --cx-radius-full:    9999px;
+
+  /* Sombras — calibradas, não exageradas */
+  --cx-shadow-xs:      0 1px 3px rgba(0,0,0,0.06);
+  --cx-shadow-sm:      0 2px 8px rgba(0,0,0,0.07);
+  --cx-shadow-md:      0 4px 16px rgba(0,0,0,0.08);
+  --cx-shadow-lg:      0 8px 32px rgba(0,0,0,0.10);
+  --cx-shadow-primary: 0 4px 16px rgba(13, 156, 110, 0.22);
+
+  /* Transições */
+  --cx-transition-fast: 150ms ease;
+  --cx-transition-base: 220ms ease;
+  --cx-transition-slow: 380ms ease;
+
+  /* Navbar height */
+  --cx-navbar-h:       64px;
 }
 
-/* semantic color variables for this project */
-:root {
-  --color-background: var(--vt-c-white);
-  --color-background-soft: var(--vt-c-white-soft);
-  --color-background-mute: var(--vt-c-white-mute);
-
-  --color-border: var(--vt-c-divider-light-2);
-  --color-border-hover: var(--vt-c-divider-light-1);
-
-  --color-heading: var(--vt-c-text-light-1);
-  --color-text: var(--vt-c-text-light-1);
-
-  --section-gap: 160px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: var(--vt-c-black);
-    --color-background-soft: var(--vt-c-black-soft);
-    --color-background-mute: var(--vt-c-black-mute);
-
-    --color-border: var(--vt-c-divider-dark-2);
-    --color-border-hover: var(--vt-c-divider-dark-1);
-
-    --color-heading: var(--vt-c-text-dark-1);
-    --color-text: var(--vt-c-text-dark-2);
-  }
-}
+/* ─── Reset & Base ─────────────────────────────────────────────────────────── */
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
   margin: 0;
-  font-weight: normal;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
 }
 
 body {
-  min-height: 100vh;
-  color: var(--color-text);
-  background: var(--color-background);
-  transition:
-    color 0.5s,
-    background-color 0.5s;
+  font-family: var(--cx-font-sans);
+  font-size: var(--cx-text-base);
+  color: var(--cx-text);
+  background: var(--cx-bg);
   line-height: 1.6;
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    Oxygen,
-    Ubuntu,
-    Cantarell,
-    'Fira Sans',
-    'Droid Sans',
-    'Helvetica Neue',
-    sans-serif;
-  font-size: 15px;
-  text-rendering: optimizeLegibility;
+  min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ─── Focus visível acessível ───────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--cx-primary);
+  outline-offset: 3px;
+  border-radius: var(--cx-radius-sm);
+}
+
+/* ─── Scrollbar discreta ────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--cx-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--cx-text-faint); }
+
+/* ─── Redução de movimento ──────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

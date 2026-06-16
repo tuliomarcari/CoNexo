@@ -16,7 +16,7 @@ const sqlCommands = [
       nome VARCHAR(255),
       email VARCHAR(255) UNIQUE,
       senha VARCHAR(255),
-      nivel ENUM('user', 'admin') DEFAULT 'user'
+      nivel VARCHAR(50) DEFAULT 'cliente'
   );`,
   `INSERT IGNORE INTO usuarios (nome, email, senha, nivel) 
    VALUES ('Administrador', 'admin@conexo.com', 'admin123', 'admin');`,

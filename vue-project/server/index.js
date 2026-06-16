@@ -2,10 +2,45 @@ require('dotenv').config();
 const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+
+// --- CONFIGURAÇÃO DE SEGURANÇA ---
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  console.warn("[Segurança] AVISO: JWT_SECRET não definido. Usando chave de desenvolvimento insegura. Defina JWT_SECRET no .env em produção!");
+  return "dev_secret_inseguro_substitua_em_producao";
+})();
+
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';
+
+// --- CONFIGURAÇÃO DE CORS ---
+const configurarCors = () => {
+  const origensPermitidas = process.env.ALLOWED_ORIGINS;
+
+  if (!origensPermitidas) {
+    console.warn("[Segurança] AVISO: ALLOWED_ORIGINS não definido. CORS permissivo ativo (apenas para desenvolvimento).");
+    return cors();
+  }
+
+  const lista = origensPermitidas.split(',').map(o => o.trim()).filter(Boolean);
+  return cors({
+    origin: (origin, callback) => {
+      // Permite requisições sem origin (ex: Postman, curl, apps mobile)
+      if (!origin || lista.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Origem não permitida pelo CORS: ${origin}`));
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  });
+};
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(configurarCors());
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -85,6 +120,36 @@ const inicializarBanco = async () => {
 inicializarBanco();
 
 // --- ROTAS DE CRIAÇÃO (POST) ---
+app.post("/cadastro", async (req, res) => {
+  const { nome, email, senha } = req.body;
+
+  if (!nome || !email || !senha || nome.trim() === "" || email.trim() === "" || senha.trim() === "") {
+    return res.status(400).json({ error: "Preencha todos os campos obrigatórios" });
+  }
+
+  const emailNormalizado = email.trim().toLowerCase();
+
+  try {
+    const [existentes] = await pool.query("SELECT id FROM usuarios WHERE email = ?", [emailNormalizado]);
+    if (existentes.length > 0) {
+      return res.status(400).json({ error: "Este e-mail já está cadastrado" });
+    }
+
+    const saltRounds = 10;
+    const hashSenha = await bcrypt.hash(senha, saltRounds);
+
+    await pool.query(
+      "INSERT INTO usuarios (nome, email, senha, nivel) VALUES (?, ?, ?, 'cliente')",
+      [nome.trim(), emailNormalizado, hashSenha]
+    );
+
+    res.status(201).json({ message: "Usuário cadastrado com sucesso" });
+  } catch (err) {
+    console.error("Erro ao realizar cadastro:", err);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
 app.post("/projetos", async (req, res) => {
   const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, status } = req.body;
   try {
@@ -95,7 +160,8 @@ app.post("/projetos", async (req, res) => {
     );
     res.json({ message: "Projeto enviado para análise!" });
   } catch (err) { 
-    res.status(500).json(err); 
+    console.error("Erro ao cadastrar projeto:", err);
+    res.status(500).json({ error: "Erro interno do servidor" }); 
   }
 });
 
@@ -105,7 +171,8 @@ app.post("/ideias", async (req, res) => {
     await pool.query("INSERT INTO ideias (titulo, nicho, descricao, status) VALUES (?, ?, ?, 'pendente')", [titulo, nicho, descricao]);
     res.json({ message: "Ideia enviada!" });
   } catch (err) { 
-    res.status(500).json(err); 
+    console.error("Erro ao cadastrar ideia:", err);
+    res.status(500).json({ error: "Erro interno do servidor" }); 
   }
 });
 
@@ -115,7 +182,8 @@ app.get("/projetos", async (req, res) => {
     const [rows] = await pool.query("SELECT * FROM projetos WHERE status = 'aprovado' ORDER BY id DESC");
     res.json(rows);
   } catch (err) { 
-    res.status(500).json(err); 
+    console.error("Erro ao listar projetos:", err);
+    res.status(500).json({ error: "Erro interno do servidor" }); 
   }
 });
 
@@ -124,12 +192,47 @@ app.get("/ideias", async (req, res) => {
     const [rows] = await pool.query("SELECT * FROM ideias WHERE status = 'aprovado' ORDER BY id DESC");
     res.json(rows);
   } catch (err) { 
-    res.status(500).json(err); 
+    console.error("Erro ao listar ideias:", err);
+    res.status(500).json({ error: "Erro interno do servidor" }); 
   }
 });
 
+// --- MIDDLEWARES DE AUTENTICAÇÃO E AUTORIZAÇÃO ---
+
+/**
+ * autenticarToken: valida o JWT enviado no header Authorization: Bearer <token>
+ * Se válido, adiciona o payload em req.usuario e chama next().
+ */
+const autenticarToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (!token) {
+    return res.status(401).json({ error: "Token não informado" });
+  }
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.usuario = payload;
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: "Token inválido ou expirado" });
+  }
+};
+
+/**
+ * exigirAdmin: garante que o usuário autenticado possui nivel === 'admin'.
+ * Deve ser usado após autenticarToken.
+ */
+const exigirAdmin = (req, res, next) => {
+  if (!req.usuario || req.usuario.nivel !== 'admin') {
+    return res.status(403).json({ error: "Acesso negado" });
+  }
+  next();
+};
+
 // --- ROTAS ADMIN ---
-app.get("/admin/pendentes", async (req, res) => {
+app.get("/admin/pendentes", autenticarToken, exigirAdmin, async (req, res) => {
   try {
     const [projetos] = await pool.query("SELECT *, 'projeto' as tipo_item FROM projetos WHERE status = 'pendente'");
     const [ideias] = await pool.query("SELECT *, 'ideia' as tipo_item FROM ideias WHERE status = 'pendente'");
@@ -139,41 +242,118 @@ app.get("/admin/pendentes", async (req, res) => {
   }
 });
 
-app.put("/admin/aprovar/:id", async (req, res) => {
+app.put("/admin/aprovar/:id", autenticarToken, exigirAdmin, async (req, res) => {
   const { id } = req.params;
+  const { tipo } = req.body; // 'projeto' ou 'ideia'
+  
+  if (!tipo) {
+    return res.status(400).json({ error: "Tipo do item não especificado." });
+  }
+
   try {
-    const [resP] = await pool.query("UPDATE projetos SET status = 'aprovado' WHERE id = ?", [id]);
-    if (resP.affectedRows === 0) {
+    if (tipo === 'projeto') {
+      await pool.query("UPDATE projetos SET status = 'aprovado' WHERE id = ?", [id]);
+    } else if (tipo === 'ideia') {
       await pool.query("UPDATE ideias SET status = 'aprovado' WHERE id = ?", [id]);
     }
     res.json({ message: "Aprovado com sucesso!" });
   } catch (err) { 
-    res.status(500).json(err); 
+    console.error("Erro ao aprovar pendente:", err);
+    res.status(500).json({ error: "Erro interno do servidor" }); 
   }
 });
 
-app.delete("/projetos/:id", async (req, res) => {
+app.delete("/projetos/:id", autenticarToken, exigirAdmin, async (req, res) => {
   try {
-    // Tenta deletar de projetos, se não houver, tenta de ideias
-    const [resP] = await pool.query("DELETE FROM projetos WHERE id = ?", [req.params.id]);
-    if (resP.affectedRows === 0) {
-        await pool.query("DELETE FROM ideias WHERE id = ?", [req.params.id]);
-    }
-    res.json({ message: "Removido!" });
+    await pool.query("DELETE FROM projetos WHERE id = ?", [req.params.id]);
+    res.json({ message: "Projeto removido!" });
   } catch (err) { 
-    res.status(500).json(err); 
+    console.error("Erro ao remover projeto:", err);
+    res.status(500).json({ error: "Erro interno do servidor" }); 
+  }
+});
+
+app.delete("/ideias/:id", autenticarToken, exigirAdmin, async (req, res) => {
+  try {
+    await pool.query("DELETE FROM ideias WHERE id = ?", [req.params.id]);
+    res.json({ message: "Ideia removida!" });
+  } catch (err) { 
+    console.error("Erro ao remover ideia:", err);
+    res.status(500).json({ error: "Erro interno do servidor" }); 
   }
 });
 
 // --- LOGIN ---
 app.post("/login", async (req, res) => {
   const { email, senha } = req.body;
+
+  if (!email || !senha) {
+    return res.status(400).json({ error: "E-mail e senha são obrigatórios" });
+  }
+
+  const emailNormalizado = email.trim().toLowerCase();
+
   try {
-    const [rows] = await pool.query("SELECT * FROM usuarios WHERE email = ? AND senha = ?", [email, senha]);
-    if (rows.length > 0) res.json(rows[0]);
-    else res.status(401).json({ message: "Credenciais inválidas" });
+    // Buscar usuário apenas pelo e-mail
+    const [rows] = await pool.query("SELECT * FROM usuarios WHERE email = ?", [emailNormalizado]);
+    
+    if (rows.length === 0) {
+      return res.status(401).json({ error: "E-mail ou senha inválidos" });
+    }
+
+    const usuario = rows[0];
+    let senhaCorreta = false;
+    const senhaSalva = usuario.senha;
+
+    // Critério simples para identificar hash bcrypt ($2a$, $2b$, $2y$)
+    const ehBcrypt = senhaSalva && (senhaSalva.startsWith("$2a$") || senhaSalva.startsWith("$2b$") || senhaSalva.startsWith("$2y$"));
+
+    if (ehBcrypt) {
+      senhaCorreta = await bcrypt.compare(senha, senhaSalva);
+    } else {
+      // COMPATIBILIDADE TEMPORÁRIA: Se a senha no banco não for hash, compara a string legada direta.
+      // NOTA: Esta compatibilidade é provisória e deve ser removida após a migração de toda a base.
+      senhaCorreta = (senha === senhaSalva);
+
+      if (senhaCorreta) {
+        // Se a senha plaintext legada estiver correta, gera imediatamente o hash seguro e atualiza o banco
+        try {
+          const saltRounds = 10;
+          const novoHash = await bcrypt.hash(senha, saltRounds);
+          await pool.query("UPDATE usuarios SET senha = ? WHERE id = ?", [novoHash, usuario.id]);
+          console.log(`[Segurança] Usuário ID ${usuario.id} migrado silenciosamente para hash bcrypt.`);
+        } catch (migrationErr) {
+          console.error(`[Segurança] Erro ao migrar senha do usuário ID ${usuario.id}:`, migrationErr);
+        }
+      }
+    }
+
+    if (!senhaCorreta) {
+      return res.status(401).json({ error: "E-mail ou senha inválidos" });
+    }
+
+    // Gerar token JWT com dados mínimos (nunca incluir senha ou hash)
+    const tokenPayload = {
+      id: usuario.id,
+      email: usuario.email,
+      nivel: usuario.nivel
+    };
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+
+    // Retornar token e dados básicos do usuário (sem senha)
+    res.json({
+      message: "Login realizado com sucesso",
+      token,
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        nivel: usuario.nivel
+      }
+    });
   } catch (err) { 
-    res.status(500).json(err); 
+    console.error("Erro ao realizar login:", err);
+    res.status(500).json({ error: "Erro interno do servidor" }); 
   }
 });
 
