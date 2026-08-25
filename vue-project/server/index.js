@@ -4,6 +4,109 @@ const mysql = require("mysql2");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
+
+// --- FUNÇÃO AUXILIAR DE ENVIO DE E-MAIL ---
+async function enviarEmailAprovacao(emailDestino, tituloItem, tipo) {
+  if (!emailDestino) {
+    console.warn(`[E-mail] Não foi possível enviar e-mail de aprovação: destinatário não informado para o/a ${tipo} "${tituloItem}".`);
+    return;
+  }
+
+  console.log('[E-mail] Enviando e-mail de aprovação para:', emailDestino);
+
+  try {
+    const emailUser = process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASS;
+
+    if (!emailUser || !emailPass) {
+      console.warn("[E-mail] Envio de e-mail abortado. As variáveis de ambiente EMAIL_USER e/ou EMAIL_PASS não estão configuradas.");
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: emailUser,
+        pass: emailPass
+      }
+    });
+
+    const assunto = `Seu ${tipo === 'projeto' ? 'projeto' : 'ideia'} foi aprovado na plataforma CoNexo!`;
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <h2 style="color: #0d9c6e; margin-top: 0;">Parabéns!</h2>
+        <p>Olá,</p>
+        <p>Temos o prazer de informar que o seu ${tipo === 'projeto' ? 'projeto' : 'ideia'} <strong>"${tituloItem}"</strong> foi aprovado(a) por um administrador.</p>
+        <p>Ele(a) já está visível e disponível para todos os usuários na plataforma <strong>CoNexo</strong>.</p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #718096;">Esta é uma mensagem automática, por favor não responda a este e-mail.</p>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: `"Plataforma CoNexo" <${emailUser}>`,
+      to: emailDestino,
+      subject: assunto,
+      html: htmlContent
+    });
+
+    console.log(`[E-mail] E-mail de aprovação enviado com sucesso para ${emailDestino} (${tipo}: "${tituloItem}").`);
+  } catch (error) {
+    console.error('[E-mail ERRO]:', error.message);
+  }
+}
+
+// --- FUNÇÃO AUXILIAR DE RECEBIMENTO DE E-MAIL ---
+async function enviarEmailRecebimento(emailDestino, tituloItem, tipo) {
+  if (!emailDestino) {
+    console.warn(`[E-mail] Não foi possível enviar e-mail de recebimento: destinatário não informado para o/a ${tipo} "${tituloItem}".`);
+    return;
+  }
+
+  console.log('[E-mail] Enviando e-mail de recebimento para:', emailDestino);
+
+  try {
+    const emailUser = process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASS;
+
+    if (!emailUser || !emailPass) {
+      console.warn("[E-mail] Envio de e-mail de recebimento abortado. As variáveis de ambiente EMAIL_USER e/ou EMAIL_PASS não estão configuradas.");
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: emailUser,
+        pass: emailPass
+      }
+    });
+
+    const assunto = `Recebemos o seu ${tipo === 'projeto' ? 'projeto' : 'ideia'} na plataforma CoNexo!`;
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <h2 style="color: #0d9c6e; margin-top: 0;">Recebido com Sucesso!</h2>
+        <p>Olá,</p>
+        <p>Confirmamos o recebimento do seu ${tipo === 'projeto' ? 'projeto' : 'ideia'} <strong>"${tituloItem}"</strong> na plataforma <strong>CoNexo</strong>.</p>
+        <p>A equipe de administração irá analisar a sua publicação antes de colocá-la no ar. Entraremos em contato se precisarmos de mais informações.</p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #718096;">Esta é uma mensagem automática, por favor não responda a este e-mail.</p>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: `"Plataforma CoNexo" <${emailUser}>`,
+      to: emailDestino,
+      subject: assunto,
+      html: htmlContent
+    });
+
+    console.log(`[E-mail] E-mail de recebimento enviado com sucesso para ${emailDestino} (${tipo}: "${tituloItem}").`);
+  } catch (error) {
+    console.error('[E-mail ERRO]:', error.message);
+  }
+}
 
 // --- CONFIGURAÇÃO DE SEGURANÇA ---
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
@@ -151,13 +254,19 @@ app.post("/cadastro", async (req, res) => {
 });
 
 app.post("/projetos", async (req, res) => {
-  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, status } = req.body;
+  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, email, telefone, status } = req.body;
   try {
     await pool.query(
       `INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, status) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, status || 'pendente']
+      [empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato || email, telefone, status || 'pendente']
     );
+
+    const destinatario = email_contato || email;
+    if (destinatario) {
+      enviarEmailRecebimento(destinatario, empresa, 'projeto');
+    }
+
     res.json({ message: "Projeto enviado para análise!" });
   } catch (err) { 
     console.error("Erro ao cadastrar projeto:", err);
@@ -166,9 +275,15 @@ app.post("/projetos", async (req, res) => {
 });
 
 app.post("/ideias", async (req, res) => {
-  const { titulo, nicho, descricao } = req.body;
+  const { titulo, nicho, descricao, email_contato, email } = req.body;
   try {
     await pool.query("INSERT INTO ideias (titulo, nicho, descricao, status) VALUES (?, ?, ?, 'pendente')", [titulo, nicho, descricao]);
+
+    const destinatario = email_contato || email;
+    if (destinatario) {
+      enviarEmailRecebimento(destinatario, titulo, 'ideia');
+    }
+
     res.json({ message: "Ideia enviada!" });
   } catch (err) { 
     console.error("Erro ao cadastrar ideia:", err);
@@ -251,11 +366,33 @@ app.put("/admin/aprovar/:id", autenticarToken, exigirAdmin, async (req, res) => 
   }
 
   try {
+    let emailDestino = null;
+    let tituloItem = "";
+
+    // Buscar informações de contato/publicação antes de aprovar
+    if (tipo === 'projeto') {
+      const [rows] = await pool.query("SELECT email_contato, empresa FROM projetos WHERE id = ?", [id]);
+      if (rows.length > 0) {
+        emailDestino = rows[0].email_contato;
+        tituloItem = rows[0].empresa;
+      }
+    } else if (tipo === 'ideia') {
+      const [rows] = await pool.query("SELECT titulo FROM ideias WHERE id = ?", [id]);
+      if (rows.length > 0) {
+        tituloItem = rows[0].titulo;
+      }
+    }
+
     if (tipo === 'projeto') {
       await pool.query("UPDATE projetos SET status = 'aprovado' WHERE id = ?", [id]);
     } else if (tipo === 'ideia') {
       await pool.query("UPDATE ideias SET status = 'aprovado' WHERE id = ?", [id]);
     }
+
+    if (emailDestino) {
+      enviarEmailAprovacao(emailDestino, tituloItem, tipo);
+    }
+
     res.json({ message: "Aprovado com sucesso!" });
   } catch (err) { 
     console.error("Erro ao aprovar pendente:", err);
