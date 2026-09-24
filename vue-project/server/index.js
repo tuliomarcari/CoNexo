@@ -572,9 +572,14 @@ const buscarMensagensHandler = async (req, res) => {
   const userNome = req.usuario?.nome ? req.usuario.nome.trim().toLowerCase() : '';
   const isAdmin = req.usuario?.nivel === 'admin';
 
-  // Parâmetros do investidor/interlocutor para filtrar a conversa 1-para-1
-  const queryInvestidorId = parseInt(req.query.investidor_id || req.query.interlocutor_id, 10) || 0;
-  const queryInvestidorNome = (req.query.investidor_nome || req.query.interlocutor_nome || '').trim().toLowerCase();
+  // Identificador do participante/investidor da conversa 1-para-1
+  const queryInvestidorId = parseInt(
+    req.query.participante_id || req.query.investidor_id || req.query.interlocutor_id, 10
+  ) || 0;
+
+  const queryInvestidorNome = (
+    req.query.participante_nome || req.query.investidor_nome || req.query.interlocutor_nome || req.query.remetente || ''
+  ).trim().toLowerCase();
 
   try {
     // 1. Obter dono do projeto
@@ -584,7 +589,7 @@ const buscarMensagensHandler = async (req, res) => {
 
     const ehDono = userId > 0 && donoId > 0 && userId === donoId;
 
-    // 2. Buscar todas as mensagens do projeto
+    // 2. Buscar todas as mensagens do projeto no MySQL
     const [todasMensagens] = await pool.query(`
       SELECT 
         m.id,
@@ -607,73 +612,54 @@ const buscarMensagensHandler = async (req, res) => {
       return res.json([]);
     }
 
-    // 3. Filtrar isolando a conversa 1-para-1 com regras de compatibilidade para mensagens antigas (legacy)
-    let mensagensFiltradas = todasMensagens.filter(m => {
+    // 3. Filtrar ESTRITAMENTE a conversa 1-para-1 do participante selecionado
+    const mensagensFiltradas = todasMensagens.filter(m => {
       const remId = Number(m.remetente_id || m.usuario_id || 0);
       const destId = Number(m.destinatario_id || 0);
       const remNome = (m.remetente_nome || m.remetente || '').trim().toLowerCase();
       const destNome = (m.destinatario || '').trim().toLowerCase();
 
-      const isLegacy = (destId === 0 && !destNome);
-
-      // Regra 1: Se for mensagem antiga (sem destinatário gravado)
-      if (isLegacy) {
-        if (!ehDono && !isAdmin) {
-          return true;
-        }
-        if (queryInvestidorId > 0 && remId === queryInvestidorId) {
-          return true;
-        }
-        if (queryInvestidorNome) {
-          if (remNome === queryInvestidorNome || remNome.includes(queryInvestidorNome) || queryInvestidorNome.includes(remNome)) {
-            return true;
-          }
-        }
-        if (remId > 0 && donoId > 0 && remId === donoId) {
-          return true;
-        }
-        if (!queryInvestidorId && !queryInvestidorNome) {
-          return true;
-        }
-      }
-
-      // Regra 2: Filtragem 1-para-1 para mensagens com destinatário explícito
+      // CASO A: O usuário logado é um INVESTIDOR comum (não-dono e não-admin)
       if (!ehDono && !isAdmin) {
         const ehRem = (userId > 0 && remId === userId) || (userNome && (remNome === userNome || remNome.includes(userNome)));
         const ehDest = (userId > 0 && destId === userId) || (userNome && (destNome === userNome || destNome.includes(userNome)));
+        
+        if (destId === 0 && !destNome) {
+          // Em histórico antigo sem destinatario gravado: aceita msgs do investidor ou msgs de resposta no projeto
+          return ehRem || (remId === donoId) || (remId === 0);
+        }
         return ehRem || ehDest;
       }
 
-      // Se for Dono/Admin e tem filtro por ID do investidor
+      // CASO B: O usuário logado é o DONO DO PROJETO ou ADMIN
+      // O frontend passou qual investidor foi selecionado na barra lateral:
       if (queryInvestidorId > 0) {
         if (remId === queryInvestidorId || destId === queryInvestidorId) {
           return true;
         }
       }
 
-      // Se for Dono/Admin e tem filtro por Nome do investidor
       if (queryInvestidorNome) {
-        const matchRem = remNome && (remNome === queryInvestidorNome || remNome.includes(queryInvestidorNome) || queryInvestidorNome.includes(remNome));
-        const matchDest = destNome && (destNome === queryInvestidorNome || destNome.includes(queryInvestidorNome) || queryInvestidorNome.includes(destNome));
-        if (matchRem || matchDest) {
+        const bateuRemetente = remNome && (remNome === queryInvestidorNome || remNome.includes(queryInvestidorNome) || queryInvestidorNome.includes(remNome));
+        const bateuDestinatario = destNome && (destNome === queryInvestidorNome || destNome.includes(queryInvestidorNome) || queryInvestidorNome.includes(destNome));
+        
+        if (bateuRemetente || bateuDestinatario) {
+          return true;
+        }
+
+        // Suporte a dados legados onde o dono respondeu sem preencher destinatario explícito:
+        if (remId === donoId && destId === 0 && !destNome) {
           return true;
         }
       }
 
-      // Se nada especificou queryInvestidorId/Nome
+      // Se nenhum participante foi especificado (ex: admin visualizando chat sem filtros)
       if (!queryInvestidorId && !queryInvestidorNome) {
         return true;
       }
 
       return false;
     });
-
-    // FALLBACK DE SEGURANÇA HISTÓRICA:
-    // Se a filtragem estrita resultou em 0 mensagens, mas o projeto POSSUI mensagens gravadas (todasMensagens.length > 0):
-    // Garanta que o histórico do projeto seja preservado e retornado em vez de exibir um chat vazio.
-    if (mensagensFiltradas.length === 0 && todasMensagens.length > 0) {
-      mensagensFiltradas = todasMensagens;
-    }
 
     res.json(mensagensFiltradas);
   } catch (err) {

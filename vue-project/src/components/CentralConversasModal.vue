@@ -280,11 +280,17 @@ const carregarMensagens = async (conversa) => {
     
     let url = `${API_URL}/mensagens/${conversa.projeto_id}`;
     const params = [];
-    if (conversa.investidor_id > 0) {
-      params.push(`investidor_id=${conversa.investidor_id}`);
+    const invId = conversa.investidor_id || conversa.participante_id || 0;
+    const invNome = conversa.investidor_nome || conversa.participante_nome || '';
+
+    if (invId > 0) {
+      params.push(`investidor_id=${invId}`);
+      params.push(`participante_id=${invId}`);
     }
-    if (conversa.investidor_nome) {
-      params.push(`investidor_nome=${encodeURIComponent(conversa.investidor_nome)}`);
+    if (invNome) {
+      params.push(`investidor_nome=${encodeURIComponent(invNome)}`);
+      params.push(`participante_nome=${encodeURIComponent(invNome)}`);
+      params.push(`remetente=${encodeURIComponent(invNome)}`);
     }
     if (params.length > 0) {
       url += `?${params.join('&')}`;
