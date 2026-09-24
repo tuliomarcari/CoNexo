@@ -625,7 +625,7 @@ const minhasConversasHandler = async (req, res) => {
 
   try {
     const [conversas] = await pool.query(`
-      SELECT 
+      SELECT DISTINCT
         p.id AS projeto_id,
         p.empresa,
         p.nicho,
@@ -634,20 +634,17 @@ const minhasConversasHandler = async (req, res) => {
         COALESCE(
           (SELECT m.mensagem FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
           (SELECT m.conteudo FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
-          'Conversa iniciada'
+          ''
         ) AS ultima_msg,
         COALESCE(
           (SELECT m.remetente FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
           'Usuário'
         ) AS autor_nome,
-        COALESCE(
-          (SELECT m.created_at FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
-          CURRENT_TIMESTAMP
-        ) AS ultima_data,
+        (SELECT MAX(m.created_at) FROM mensagens m WHERE m.projeto_id = p.id) AS ultima_data,
         (SELECT COUNT(*) FROM mensagens m WHERE m.projeto_id = p.id) AS total_mensagens
       FROM projetos p
-      WHERE p.status = 'aprovado' OR EXISTS (SELECT 1 FROM mensagens m WHERE m.projeto_id = p.id)
-      ORDER BY total_mensagens DESC, ultima_data DESC
+      INNER JOIN mensagens m ON m.projeto_id = p.id
+      ORDER BY ultima_data DESC
     `);
 
     res.json(conversas);

@@ -222,23 +222,7 @@ const carregarConversas = async () => {
     try {
       res = await axios.get(`${API_URL}/minhas-conversas`, { headers });
     } catch {
-      try {
-        res = await axios.get(`${API_URL}/conversas`, { headers });
-      } catch {
-        res = await axios.get(`${API_URL}/projetos`);
-        if (res.data && Array.isArray(res.data)) {
-          res.data = res.data.map(p => ({
-            projeto_id: p.id,
-            empresa: p.empresa,
-            nicho: p.nicho,
-            valor: p.valor,
-            porcentagem: p.porcentagem,
-            ultima_msg: 'Clique para negociar',
-            autor_nome: 'Sistema',
-            ultima_data: new Date().toISOString()
-          }));
-        }
-      }
+      res = await axios.get(`${API_URL}/conversas`, { headers });
     }
     
     if (res.data && Array.isArray(res.data)) {
