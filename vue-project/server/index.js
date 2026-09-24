@@ -234,7 +234,6 @@ const inicializarBanco = async () => {
       )
     `);
 
-    // TABELA DE MENSAGENS / CHAT DE NEGOCIAÇÕES
     await pool.query(`
       CREATE TABLE IF NOT EXISTS mensagens (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -302,8 +301,10 @@ app.post("/cadastro", async (req, res) => {
 });
 
 app.post("/projetos", async (req, res) => {
-  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, email, telefone, imagem_url, status } = req.body;
+  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, email, telefone, imagem_url } = req.body;
   try {
+    const statusInicial = 'pendente';
+
     await pool.query(
       `INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, imagem_url, status) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -315,11 +316,11 @@ app.post("/projetos", async (req, res) => {
         descricao,
         valor,
         porcentagem,
-        usuario_id,
-        email_contato || email,
-        telefone,
+        usuario_id || null,
+        email_contato || email || null,
+        telefone || null,
         imagem_url || null,
-        status || 'pendente'
+        statusInicial
       ]
     );
 
@@ -328,17 +329,18 @@ app.post("/projetos", async (req, res) => {
       enviarEmailRecebimento(destinatario, empresa, 'projeto');
     }
 
-    res.json({ message: "Projeto enviado para análise!" });
+    res.json({ message: "Projeto enviado para análise com sucesso!" });
   } catch (err) {
     console.error("Erro ao cadastrar projeto:", err);
-    res.status(500).json({ error: "Erro interno do servidor" });
+    res.status(500).json({ error: "Erro interno do servidor ao cadastrar projeto" });
   }
 });
 
 app.post("/ideias", async (req, res) => {
   const { titulo, nicho, descricao, email_contato, email } = req.body;
   try {
-    await pool.query("INSERT INTO ideias (titulo, nicho, descricao, status) VALUES (?, ?, ?, 'pendente')", [titulo, nicho, descricao]);
+    const statusInicial = 'pendente';
+    await pool.query("INSERT INTO ideias (titulo, nicho, descricao, status) VALUES (?, ?, ?, ?)", [titulo, nicho, descricao, statusInicial]);
 
     const destinatario = email_contato || email;
     if (destinatario) {
@@ -468,7 +470,7 @@ app.post("/lojas", async (req, res) => {
     res.json({ message: "Configuração da loja salva com sucesso!" });
   } catch (err) {
     console.error("Erro ao salvar loja:", err);
-    res.status(500).json({ error: "Erro interno ao salvar loja" });
+    res.status(500).json({ error: "Erro interno do servidor ao salvar loja" });
   }
 });
 
@@ -506,10 +508,11 @@ app.get("/ideias", async (req, res) => {
 // ROTAS ADMIN
 app.get("/admin/pendentes", autenticarToken, exigirAdmin, async (req, res) => {
   try {
-    const [projetos] = await pool.query("SELECT *, 'projeto' as tipo_item FROM projetos WHERE status = 'pendente'");
-    const [ideias] = await pool.query("SELECT *, 'ideia' as tipo_item FROM ideias WHERE status = 'pendente'");
+    const [projetos] = await pool.query("SELECT *, 'projeto' as tipo_item FROM projetos WHERE status = 'pendente' OR status IS NULL OR status = ''");
+    const [ideias] = await pool.query("SELECT *, 'ideia' as tipo_item FROM ideias WHERE status = 'pendente' OR status IS NULL OR status = ''");
     res.json([...projetos, ...ideias]);
   } catch (err) {
+    console.error("Erro ao buscar pendentes:", err);
     res.status(500).json({ error: "Erro ao buscar pendentes" });
   }
 });

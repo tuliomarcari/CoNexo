@@ -47,18 +47,20 @@ const navegar = (pagina) => {
   menuMobileAberto.value = false;
 };
 
-const adicionarProjeto = async (projeto) => {
+const adicionarProjeto = async (projeto, callback) => {
   try {
     const projetoComStatus = { ...projeto, status: 'pendente' };
     const res = await axios.post(`${API_URL}/projetos`, projetoComStatus);
     if (res.status === 200 || res.status === 201) {
-      alert("Projeto enviado com sucesso! Ele aparecerá no painel para aprovação.");
+      alert("Projeto enviado para análise com sucesso! Ele já está na fila do administrador para ser aprovado.");
       paginaAtual.value = 'home';
       await carregarDados();
+      if (typeof callback === 'function') callback(true);
     }
   } catch (err) {
-    console.error("Erro detalhado:", err.response?.data || err.message);
-    alert("Erro ao publicar projeto. Verifique a conexão.");
+    console.error("Erro detalhado ao publicar projeto:", err.response?.data || err.message);
+    alert("Erro ao publicar projeto: " + (err.response?.data?.error || "Verifique se o servidor está rodando."));
+    if (typeof callback === 'function') callback(false);
   }
 };
 

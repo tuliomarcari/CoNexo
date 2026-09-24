@@ -85,7 +85,9 @@
                 <input id="proj-tel" v-model="novo.telefone" type="text" placeholder="+55 11 90000-0000" />
               </div>
 
-              <button type="submit" class="cx-submit">Publicar projeto</button>
+              <button type="submit" class="cx-submit" :disabled="salvando">
+                {{ salvando ? 'Enviando projeto...' : 'Publicar projeto' }}
+              </button>
             </form>
           </div>
         </aside>
@@ -239,16 +241,29 @@ const removerImagemAnexada = () => {
   if (fileInput) fileInput.value = '';
 };
 
+const salvando = ref(false);
+
 const enviarProjeto = () => {
+  if (salvando.value) return;
+  salvando.value = true;
+
   const projetoFinal = {
     ...novo.value,
-    usuario_id: props.user?.id,
+    usuario_id: props.user?.id || null,
     status: 'pendente'
   };
-  emit('salvar', projetoFinal);
-  Object.keys(novo.value).forEach(key => novo.value[key] = '');
-  removerImagemAnexada();
-  alert("Projeto enviado com sucesso! Ele aparecerá na lista assim que o administrador aprová-lo.");
+
+  if (!projetoFinal.email_contato && props.user?.email) {
+    projetoFinal.email_contato = props.user.email;
+  }
+
+  emit('salvar', projetoFinal, (sucesso) => {
+    salvando.value = false;
+    if (sucesso) {
+      Object.keys(novo.value).forEach(key => novo.value[key] = '');
+      removerImagemAnexada();
+    }
+  });
 };
 
 // Funções de Chat
