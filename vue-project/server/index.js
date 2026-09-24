@@ -505,11 +505,12 @@ const enviarMensagemHandler = async (req, res) => {
   }
 
   const idRemetente = req.usuario?.id || usuario_id || 0;
+  const idDestinatario = parseInt(destinatario_id, 10) || 0;
   const nomeRemetente = req.usuario?.nome || remetente || 'Usuário';
 
-  console.log(`[Chat] Recebida mensagem para projeto #${projId}: "${textoMensagem.substring(0, 30)}"`);
+  console.log(`[Chat 1-para-1] Mensagem para projeto #${projId}: "${textoMensagem.substring(0, 30)}"`);
 
-  // Garante a criação da tabela e da coluna 'mensagem' diretamente no handler antes de inserir
+  // Garante a criação da tabela e colunas necessárias
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS mensagens (
@@ -526,41 +527,32 @@ const enviarMensagemHandler = async (req, res) => {
   try { await pool.query(`ALTER TABLE mensagens ADD COLUMN conteudo TEXT`); } catch (e) {}
   try { await pool.query(`ALTER TABLE mensagens ADD COLUMN remetente VARCHAR(255)`); } catch (e) {}
   try { await pool.query(`ALTER TABLE mensagens ADD COLUMN remetente_id INT DEFAULT 0`); } catch (e) {}
+  try { await pool.query(`ALTER TABLE mensagens ADD COLUMN destinatario_id INT DEFAULT 0`); } catch (e) {}
   try { await pool.query(`ALTER TABLE mensagens ADD COLUMN usuario_id INT DEFAULT 0`); } catch (e) {}
 
   try {
     await pool.query(
-      "INSERT INTO mensagens (projeto_id, remetente, mensagem, remetente_id, usuario_id) VALUES (?, ?, ?, ?, ?)",
-      [projId, nomeRemetente, textoMensagem, idRemetente, idRemetente]
+      "INSERT INTO mensagens (projeto_id, remetente, mensagem, remetente_id, usuario_id, destinatario_id) VALUES (?, ?, ?, ?, ?, ?)",
+      [projId, nomeRemetente, textoMensagem, idRemetente, idRemetente, idDestinatario]
     );
-    console.log(`✅ Mensagem salva com sucesso no projeto #${projId}`);
+    console.log(`✅ Mensagem 1-para-1 salva no projeto #${projId}`);
     return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
   } catch (err1) {
-    console.error("Erro detalhado ao salvar mensagem (Tentativa 1):", err1.message);
-
     try {
       await pool.query(
-        "INSERT INTO mensagens (projeto_id, remetente, mensagem) VALUES (?, ?, ?)",
-        [projId, nomeRemetente, textoMensagem]
+        "INSERT INTO mensagens (projeto_id, remetente, mensagem, remetente_id) VALUES (?, ?, ?, ?)",
+        [projId, nomeRemetente, textoMensagem, idRemetente]
       );
-      console.log(`✅ Mensagem salva via coluna simples no projeto #${projId}`);
       return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
     } catch (err2) {
-      console.error("Erro detalhado (Tentativa 2):", err2.message);
-
       try {
         await pool.query(
-          "INSERT INTO mensagens (projeto_id, conteudo) VALUES (?, ?)",
-          [projId, textoMensagem]
+          "INSERT INTO mensagens (projeto_id, remetente, mensagem) VALUES (?, ?, ?)",
+          [projId, nomeRemetente, textoMensagem]
         );
-        console.log(`✅ Mensagem salva via fallback 'conteudo' no projeto #${projId}`);
         return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
       } catch (err3) {
-        console.error("Erro detalhado final ao salvar mensagem:", err3);
-        return res.status(500).json({
-          error: "Erro ao salvar mensagem",
-          details: err3.message
-        });
+        return res.status(500).json({ error: "Erro ao salvar mensagem", details: err3.message });
       }
     }
   }
@@ -578,45 +570,27 @@ const buscarMensagensHandler = async (req, res) => {
   const userNome = req.usuario?.nome ? req.usuario.nome.trim() : '';
   const isAdmin = req.usuario?.nivel === 'admin';
 
+  // Parâmetros do investidor/interlocutor para filtrar a conversa 1-para-1
+  const queryInvestidorId = parseInt(req.query.investidor_id || req.query.interlocutor_id, 10) || 0;
+  const queryInvestidorNome = (req.query.investidor_nome || req.query.interlocutor_nome || '').trim();
+
   try {
     // 1. Obter dono do projeto
     const [donoRows] = await pool.query("SELECT usuario_id FROM projetos WHERE id = ?", [projId]);
-    const donoId = donoRows.length > 0 ? donoRows[0].usuario_id : null;
+    if (donoRows.length === 0) return res.json([]);
+    const donoId = Number(donoRows[0].usuario_id || 0);
 
-    // 2. Verificar se o usuário logado participou da conversa no projeto
-    let participou = false;
-    if (userId || userNome) {
-      const [partRows] = await pool.query(`
-        SELECT id FROM mensagens 
-        WHERE projeto_id = ? 
-          AND (
-            (remetente_id = ? AND remetente_id > 0)
-            OR (usuario_id = ? AND usuario_id > 0)
-            OR (destinatario_id = ? AND destinatario_id > 0)
-            OR (LOWER(remetente) = LOWER(?) AND remetente IS NOT NULL AND remetente != '')
-          )
-        LIMIT 1
-      `, [projId, userId, userId, userId, userNome]);
-      
-      if (partRows.length > 0) {
-        participou = true;
-      }
-    }
+    const ehDono = userId > 0 && donoId > 0 && userId === donoId;
 
-    const ehDono = userId && donoId && (Number(userId) === Number(donoId));
-
-    // Privacidade Rígida: se não for o autor do projeto, nem participante ativo, nem admin -> proíbe o acesso a conversas alheias
-    if (!ehDono && !participou && !isAdmin) {
-      return res.json([]);
-    }
-
-    const [mensagens] = await pool.query(`
+    // 2. Buscar mensagens do projeto
+    const [todasMensagens] = await pool.query(`
       SELECT 
         m.id,
         m.projeto_id,
         COALESCE(m.remetente, u.nome, 'Usuário') AS remetente_nome,
         COALESCE(m.remetente, '') AS remetente,
         COALESCE(m.remetente_id, m.usuario_id, 0) AS remetente_id,
+        COALESCE(m.destinatario_id, 0) AS destinatario_id,
         COALESCE(m.usuario_id, 0) AS usuario_id,
         COALESCE(m.mensagem, m.conteudo, m.texto, '') AS mensagem,
         COALESCE(m.created_at, m.data_envio, CURRENT_TIMESTAMP) AS data_envio
@@ -626,9 +600,35 @@ const buscarMensagensHandler = async (req, res) => {
       ORDER BY m.id ASC
     `, [projId]);
 
-    res.json(mensagens);
+    // 3. Filtrar isolando estritamente a conversa 1-para-1 entre o investidor e o dono
+    const mensagensFiltradas = todasMensagens.filter(m => {
+      const remId = Number(m.remetente_id || m.usuario_id || 0);
+      const destId = Number(m.destinatario_id || 0);
+      const remNome = (m.remetente_nome || m.remetente || '').trim();
+
+      // Se o usuário logado for INVESTIDOR (não é o dono do projeto)
+      if (!ehDono && !isAdmin) {
+        // Exibe APENAS mensagens onde o usuário logado participou
+        const ehRem = (userId > 0 && remId === userId) || (userNome && remNome.toLowerCase() === userNome.toLowerCase());
+        const ehDest = (userId > 0 && destId === userId);
+        return ehRem || ehDest;
+      }
+
+      // Se o usuário logado for o DONO do projeto (ou Admin)
+      // Se um investidor específico foi informado na requisição, traz só a conversa desse investidor
+      if (queryInvestidorId > 0) {
+        return (remId === queryInvestidorId || destId === queryInvestidorId);
+      }
+      if (queryInvestidorNome) {
+        return (remNome.toLowerCase() === queryInvestidorNome.toLowerCase() || destId > 0);
+      }
+
+      return true;
+    });
+
+    res.json(mensagensFiltradas);
   } catch (err) {
-    console.warn("⚠️ Busca completa de mensagens falhou:", err.message);
+    console.warn("⚠️ Busca de mensagens 1-para-1 falhou:", err.message);
     res.json([]);
   }
 };
@@ -638,73 +638,104 @@ const minhasConversasHandler = async (req, res) => {
   const userNome = req.usuario?.nome ? req.usuario.nome.trim() : '';
   const isAdmin = req.usuario?.nivel === 'admin';
 
-  // Se não autenticado nem admin -> sigilo total (retorna lista vazia)
   if (!userId && !userNome && !isAdmin) {
     return res.json([]);
   }
 
   try {
-    let sql, params;
+    const [rows] = await pool.query(`
+      SELECT 
+        m.id AS msg_id,
+        m.projeto_id,
+        p.empresa,
+        p.nicho,
+        p.valor,
+        p.porcentagem,
+        p.usuario_id AS dono_id,
+        m.remetente_id,
+        m.usuario_id AS msg_usuario_id,
+        m.destinatario_id,
+        COALESCE(m.remetente, u.nome, 'Usuário') AS remetente_nome,
+        COALESCE(m.mensagem, m.conteudo, '') AS mensagem,
+        COALESCE(m.created_at, m.data_envio, CURRENT_TIMESTAMP) AS data_envio
+      FROM mensagens m
+      INNER JOIN projetos p ON m.projeto_id = p.id
+      LEFT JOIN usuarios u ON (m.remetente_id = u.id OR m.usuario_id = u.id)
+      ORDER BY m.id ASC
+    `);
 
-    if (isAdmin) {
-      sql = `
-        SELECT DISTINCT
-          p.id AS projeto_id,
-          p.empresa,
-          p.nicho,
-          p.valor,
-          p.porcentagem,
-          COALESCE(
-            (SELECT m.mensagem FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
-            (SELECT m.conteudo FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
-            ''
-          ) AS ultima_msg,
-          COALESCE(
-            (SELECT m.remetente FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
-            'Usuário'
-          ) AS autor_nome,
-          (SELECT MAX(m.created_at) FROM mensagens m WHERE m.projeto_id = p.id) AS ultima_data,
-          (SELECT COUNT(*) FROM mensagens m WHERE m.projeto_id = p.id) AS total_mensagens
-        FROM projetos p
-        INNER JOIN mensagens m ON m.projeto_id = p.id
-        ORDER BY ultima_data DESC
-      `;
-      params = [];
-    } else {
-      sql = `
-        SELECT DISTINCT
-          p.id AS projeto_id,
-          p.empresa,
-          p.nicho,
-          p.valor,
-          p.porcentagem,
-          COALESCE(
-            (SELECT m.mensagem FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
-            (SELECT m.conteudo FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
-            ''
-          ) AS ultima_msg,
-          COALESCE(
-            (SELECT m.remetente FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
-            'Usuário'
-          ) AS autor_nome,
-          (SELECT MAX(m.created_at) FROM mensagens m WHERE m.projeto_id = p.id) AS ultima_data,
-          (SELECT COUNT(*) FROM mensagens m WHERE m.projeto_id = p.id) AS total_mensagens
-        FROM projetos p
-        INNER JOIN mensagens m ON m.projeto_id = p.id
-        WHERE (p.usuario_id = ? AND ? > 0)
-           OR (m.remetente_id = ? AND ? > 0)
-           OR (m.usuario_id = ? AND ? > 0)
-           OR (m.destinatario_id = ? AND ? > 0)
-           OR (LOWER(m.remetente) = LOWER(?) AND ? != '')
-        ORDER BY ultima_data DESC
-      `;
-      params = [userId, userId, userId, userId, userId, userId, userId, userId, userNome, userNome];
+    // Agrupa mensagens em threads 1-para-1 separando cada investidor
+    const conversasMap = new Map();
+
+    for (const r of rows) {
+      const donoId = Number(r.dono_id || 0);
+      const remId = Number(r.remetente_id || r.msg_usuario_id || 0);
+      const destId = Number(r.destinatario_id || 0);
+      const remNome = (r.remetente_nome || '').trim();
+
+      // Identifica quem é o investidor (participante não-dono)
+      let investidorId = 0;
+      let investidorNome = 'Investidor';
+
+      if (donoId > 0) {
+        if (remId > 0 && remId !== donoId) {
+          investidorId = remId;
+          investidorNome = remNome;
+        } else if (destId > 0 && destId !== donoId) {
+          investidorId = destId;
+        } else if (remId === donoId && destId > 0) {
+          investidorId = destId;
+        }
+      }
+
+      if (investidorId === 0 && remId === 0 && remNome) {
+        investidorNome = remNome;
+      }
+
+      // Validação de Permissão de Acesso por thread 1-para-1
+      const ehDono = userId > 0 && donoId > 0 && userId === donoId;
+      const ehInvestidor = (userId > 0 && investidorId > 0 && userId === investidorId) ||
+                           (userId > 0 && remId > 0 && userId === remId) ||
+                           (userNome && remNome.toLowerCase() === userNome.toLowerCase());
+
+      if (!isAdmin && !ehDono && !ehInvestidor) {
+        continue; // Descarta conversas de terceiros
+      }
+
+      // Donos de projetos vêm "NomeDoProjeto - NomeDoInvestidor", investidores vêm "NomeDoProjeto"
+      const tituloDisplay = (ehDono && investidorNome && investidorNome !== 'Investidor')
+        ? `${r.empresa} - ${investidorNome}`
+        : r.empresa;
+
+      const chaveInvestidor = investidorId > 0 ? `id_${investidorId}` : `nome_${investidorNome.toLowerCase()}`;
+      const conversaKey = `${r.projeto_id}_${chaveInvestidor}`;
+
+      const conversaObj = {
+        conversa_key: conversaKey,
+        projeto_id: r.projeto_id,
+        empresa: tituloDisplay,
+        empresa_original: r.empresa,
+        nicho: r.nicho,
+        valor: r.valor,
+        porcentagem: r.porcentagem,
+        dono_id: donoId,
+        investidor_id: investidorId,
+        investidor_nome: investidorNome,
+        ultima_msg: r.mensagem,
+        autor_nome: r.remetente_nome,
+        ultima_data: r.data_envio
+      };
+
+      conversasMap.set(conversaKey, conversaObj);
     }
 
-    const [conversas] = await pool.query(sql, params);
-    res.json(conversas);
+    const listaConversas = Array.from(conversasMap.values()).sort(
+      (a, b) => new Date(b.ultima_data) - new Date(a.ultima_data)
+    );
+
+    res.json(listaConversas);
   } catch (err) {
-    console.error("Erro ao buscar minhas conversas:", err.message);
+    console.error("Erro ao buscar conversas 1-para-1:", err.message);
     res.json([]);
   }
 };

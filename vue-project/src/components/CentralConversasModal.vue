@@ -43,9 +43,9 @@
           <div v-else class="cx-conversas-lista">
             <div 
               v-for="c in conversasFiltradas" 
-              :key="c.projeto_id"
+              :key="c.conversa_key || c.projeto_id"
               class="cx-conversa-item"
-              :class="{ 'cx-conversa-item--active': conversaSelecionada?.projeto_id === c.projeto_id }"
+              :class="{ 'cx-conversa-item--active': conversaSelecionada?.conversa_key ? conversaSelecionada.conversa_key === c.conversa_key : conversaSelecionada?.projeto_id === c.projeto_id }"
               @click="selecionarConversa(c)"
             >
               <div class="cx-conversa-avatar">
@@ -234,13 +234,17 @@ const carregarConversas = async () => {
         if (encontrada) {
           selecionarConversa(encontrada);
         } else {
-          // Cria conversa temporária para o projeto inicial
+          // Cria conversa temporária 1-para-1 para o projeto inicial
           const novaConversa = {
+            conversa_key: `${props.projetoInicial.id}_novo`,
             projeto_id: props.projetoInicial.id,
             empresa: props.projetoInicial.empresa,
             nicho: props.projetoInicial.nicho,
             valor: props.projetoInicial.valor,
             porcentagem: props.projetoInicial.porcentagem,
+            dono_id: props.projetoInicial.usuario_id || 0,
+            investidor_id: props.usuario?.id || 0,
+            investidor_nome: props.usuario?.nome || 'Usuário',
             ultima_msg: 'Inicie a conversa...',
             autor_nome: props.usuario?.nome || 'Usuário',
             ultima_data: new Date().toISOString()
@@ -249,7 +253,6 @@ const carregarConversas = async () => {
           selecionarConversa(novaConversa);
         }
       } else if (conversas.value.length > 0 && !conversaSelecionada.value) {
-        // Seleciona a primeira conversa por padrão no desktop
         if (window.innerWidth > 768) {
           selecionarConversa(conversas.value[0]);
         }
@@ -265,16 +268,29 @@ const carregarConversas = async () => {
 const selecionarConversa = async (conversa) => {
   conversaSelecionada.value = conversa;
   mobileChatAtivo.value = true;
-  await carregarMensagens(conversa.projeto_id);
+  await carregarMensagens(conversa);
 };
 
-const carregarMensagens = async (projetoId) => {
-  if (!projetoId) return;
+const carregarMensagens = async (conversa) => {
+  if (!conversa || !conversa.projeto_id) return;
   carregandoMensagens.value = true;
   try {
     const token = localStorage.getItem('token');
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await axios.get(`${API_URL}/mensagens/${projetoId}`, { headers });
+    
+    let url = `${API_URL}/mensagens/${conversa.projeto_id}`;
+    const params = [];
+    if (conversa.investidor_id > 0) {
+      params.push(`investidor_id=${conversa.investidor_id}`);
+    }
+    if (conversa.investidor_nome) {
+      params.push(`investidor_nome=${encodeURIComponent(conversa.investidor_nome)}`);
+    }
+    if (params.length > 0) {
+      url += `?${params.join('&')}`;
+    }
+
+    const res = await axios.get(url, { headers });
     mensagens.value = Array.isArray(res.data) ? res.data : [];
     
     await nextTick();
@@ -297,31 +313,30 @@ const enviarNovaMensagem = async () => {
   
   enviando.value = true;
   const texto = novaMensagem.value.trim();
-  const projId = conversaSelecionada.value.projeto_id;
+  const conv = conversaSelecionada.value;
   const nomeUsuario = props.usuario?.nome || 'Usuário';
+
+  const me = props.usuario?.id ? Number(props.usuario.id) : 0;
+  const ehDono = me > 0 && conv.dono_id > 0 && me === conv.dono_id;
+  const destinatarioId = ehDono ? (conv.investidor_id || 0) : (conv.dono_id || 0);
 
   try {
     const token = localStorage.getItem('token');
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     
     await axios.post(`${API_URL}/mensagens`, {
-      projeto_id: projId,
+      projeto_id: conv.projeto_id,
+      destinatario_id: destinatarioId,
       remetente: nomeUsuario,
       mensagem: texto
     }, { headers });
 
     novaMensagem.value = '';
     
-    // Atualiza mensagens locais imediatamente
-    await carregarMensagens(projId);
-    
-    // Atualiza a prévia na sidebar
-    const conv = conversas.value.find(c => c.projeto_id === projId);
-    if (conv) {
-      conv.ultima_msg = texto;
-      conv.autor_nome = nomeUsuario;
-      conv.ultima_data = new Date().toISOString();
-    }
+    await carregarMensagens(conv);
+    conv.ultima_msg = texto;
+    conv.autor_nome = nomeUsuario;
+    conv.ultima_data = new Date().toISOString();
   } catch (err) {
     console.error("Erro ao enviar mensagem:", err);
     alert("Erro ao enviar mensagem. Tente novamente.");
@@ -332,10 +347,9 @@ const enviarNovaMensagem = async () => {
 
 onMounted(() => {
   carregarConversas();
-  // Polling a cada 3 segundos para mensagens em tempo real
   intervalPolling = setInterval(() => {
     if (conversaSelecionada.value) {
-      carregarMensagens(conversaSelecionada.value.projeto_id);
+      carregarMensagens(conversaSelecionada.value);
     }
   }, 3000);
 });
