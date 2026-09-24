@@ -703,20 +703,20 @@ const fecharChat = () => {
 /* ESTILOS DA BARRA DE FILTROS DE PROJETOS */
 .filter-bar {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--cx-space-4);
   background: var(--cx-surface);
   border: 1px solid var(--cx-border);
   border-radius: var(--cx-radius-xl);
-  padding: var(--cx-space-5) var(--cx-space-6);
+  padding: 1.25rem 1.5rem;
   margin-bottom: var(--cx-space-6);
   flex-wrap: wrap;
 }
 
 .filter-group {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: var(--cx-space-4);
   flex: 1;
   flex-wrap: wrap;
@@ -725,25 +725,34 @@ const fecharChat = () => {
 .filter-item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 8px;
   flex: 1;
   min-width: 140px;
+  position: relative;
 }
 
 .filter-item label {
   display: block;
-  font-size: var(--cx-text-xs);
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   color: var(--cx-text-muted);
-  letter-spacing: 0.06em;
-  margin-bottom: 2px;
-  line-height: 1;
+  letter-spacing: 0.08em;
+  margin: 0 0 4px 0;
+  padding: 0;
+  line-height: 1.2;
+  text-align: left;
+  align-self: flex-start;
+  position: static;
+  transform: none;
+  background: transparent;
+  pointer-events: auto;
 }
 
 .filter-item select {
   width: 100%;
-  height: 42px;
+  height: 44px;
   padding: 0 12px;
   border: 1px solid var(--cx-border);
   border-radius: var(--cx-radius-md);
@@ -752,17 +761,18 @@ const fecharChat = () => {
   color: var(--cx-text);
   background: var(--cx-bg);
   box-sizing: border-box;
+  margin: 0;
+  outline: none;
   transition: border-color var(--cx-transition-fast), box-shadow var(--cx-transition-fast);
 }
 
 .filter-item select:focus {
-  outline: none;
   border-color: var(--cx-primary);
   box-shadow: 0 0 0 3px var(--cx-primary-alpha);
 }
 
 .filter-reset-btn {
-  height: 42px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -776,7 +786,7 @@ const fecharChat = () => {
   cursor: pointer;
   white-space: nowrap;
   transition: all var(--cx-transition-fast);
-  margin-top: auto;
+  margin-top: 24px;
 }
 
 .filter-reset-btn:hover {
@@ -805,15 +815,15 @@ const fecharChat = () => {
   .filter-bar {
     flex-direction: column;
     align-items: stretch;
-    padding: var(--cx-space-4);
-    gap: var(--cx-space-4);
+    padding: 1rem;
+    gap: 1rem;
   }
 
   .filter-group {
     flex-direction: column;
     align-items: stretch;
     width: 100%;
-    gap: var(--cx-space-3);
+    gap: 1rem;
   }
 
   .filter-item {
@@ -823,7 +833,7 @@ const fecharChat = () => {
 
   .filter-reset-btn {
     width: 100%;
-    height: 42px;
+    height: 44px;
     text-align: center;
     margin-top: 4px;
   }
