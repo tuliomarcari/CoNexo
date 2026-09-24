@@ -191,17 +191,20 @@ async function inicializarBanco() {
       `);
     } catch (e) {}
 
-    // Tabela Mensagens / Chat (Estrutura Exata)
+    // Tabela Mensagens / Chat (Estrutura Exata com Colunas Garantidas)
     try {
       await connection.query(`
         CREATE TABLE IF NOT EXISTS mensagens (
           id INT AUTO_INCREMENT PRIMARY KEY,
           projeto_id INT NOT NULL,
           remetente VARCHAR(255),
-          mensagem TEXT NOT NULL,
+          mensagem TEXT,
+          conteudo TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      try { await connection.query(`ALTER TABLE mensagens ADD COLUMN mensagem TEXT`); } catch (e) {}
+      try { await connection.query(`ALTER TABLE mensagens ADD COLUMN conteudo TEXT`); } catch (e) {}
       try { await connection.query(`ALTER TABLE mensagens ADD COLUMN remetente VARCHAR(255)`); } catch (e) {}
       try { await connection.query(`ALTER TABLE mensagens ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`); } catch (e) {}
       try { await connection.query(`ALTER TABLE mensagens ADD COLUMN remetente_id INT DEFAULT 0`); } catch (e) {}
@@ -500,20 +503,22 @@ const enviarMensagemHandler = async (req, res) => {
 
   console.log(`[Chat] Recebida mensagem para projeto #${projId}: "${textoMensagem.substring(0, 30)}"`);
 
-  // Garante a criação da tabela de mensagens com a estrutura exata solicitada
+  // Garante a criação da tabela e da coluna 'mensagem' diretamente no handler antes de inserir
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS mensagens (
         id INT AUTO_INCREMENT PRIMARY KEY,
         projeto_id INT NOT NULL,
         remetente VARCHAR(255),
-        mensagem TEXT NOT NULL,
+        mensagem TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-  } catch (tErr) {
-    console.warn("Aviso ao verificar tabela mensagens:", tErr.message);
-  }
+  } catch (tErr) {}
+
+  try { await pool.query(`ALTER TABLE mensagens ADD COLUMN mensagem TEXT`); } catch (e) {}
+  try { await pool.query(`ALTER TABLE mensagens ADD COLUMN conteudo TEXT`); } catch (e) {}
+  try { await pool.query(`ALTER TABLE mensagens ADD COLUMN remetente VARCHAR(255)`); } catch (e) {}
 
   try {
     await pool.query(
@@ -523,21 +528,77 @@ const enviarMensagemHandler = async (req, res) => {
     console.log(`✅ Mensagem salva com sucesso no projeto #${projId}`);
     return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
   } catch (err1) {
-    console.error("Erro detalhado ao salvar mensagem (Tentativa 1):", err1);
+    console.error("Erro detalhado ao salvar mensagem (Tentativa 1):", err1.message);
 
     try {
       await pool.query(
-        "INSERT INTO mensagens (projeto_id, mensagem) VALUES (?, ?)",
-        [projId, textoMensagem]
+        "INSERT INTO mensagens (projeto_id, remetente, conteudo) VALUES (?, ?, ?)",
+        [projId, nomeRemetente, textoMensagem]
       );
-      console.log(`✅ Mensagem salva com sucesso via fallback simples no projeto #${projId}`);
+      console.log(`✅ Mensagem salva via coluna 'conteudo' no projeto #${projId}`);
       return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
     } catch (err2) {
-      console.error("Erro detalhado final ao salvar mensagem:", err2);
-      return res.status(500).json({
-        error: "Erro ao salvar mensagem",
-        details: err2.message
-      });
+      console.error("Erro detalhado (Tentativa 2):", err2.message);
+
+      try {
+        await pool.query(
+          "INSERT INTO mensagens (projeto_id, mensagem) VALUES (?, ?)",
+          [projId, textoMensagem]
+        );
+        console.log(`✅ Mensagem salva via fallback simples no projeto #${projId}`);
+        return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
+      } catch (err3) {
+        console.error("Erro detalhado final ao salvar mensagem:", err3);
+        return res.status(500).json({
+          error: "Erro ao salvar mensagem",
+          details: err3.message
+        });
+      }
+    }
+  }
+};
+
+const buscarMensagensHandler = async (req, res) => {
+  const { projeto_id } = req.params;
+  const projId = parseInt(projeto_id, 10);
+
+  if (isNaN(projId)) {
+    return res.status(400).json({ error: "ID do projeto inválido." });
+  }
+
+  try {
+    const [mensagens] = await pool.query(`
+      SELECT 
+        m.id,
+        m.projeto_id,
+        COALESCE(m.remetente, u.nome, 'Usuário') AS remetente_nome,
+        COALESCE(m.mensagem, m.conteudo, m.texto, '') AS mensagem,
+        COALESCE(m.created_at, m.data_envio, CURRENT_TIMESTAMP) AS data_envio
+      FROM mensagens m
+      LEFT JOIN usuarios u ON (m.remetente_id = u.id OR m.usuario_id = u.id)
+      WHERE m.projeto_id = ?
+      ORDER BY m.id ASC
+    `, [projId]);
+
+    res.json(mensagens);
+  } catch (err) {
+    console.warn("⚠️ Busca completa de mensagens falhou, usando fallback simples:", err.message);
+    try {
+      const [mensagensSimples] = await pool.query(`
+        SELECT 
+          id,
+          projeto_id,
+          COALESCE(remetente, 'Usuário') AS remetente_nome,
+          COALESCE(mensagem, conteudo, texto, '') AS mensagem,
+          COALESCE(created_at, data_envio, CURRENT_TIMESTAMP) AS data_envio
+        FROM mensagens 
+        WHERE projeto_id = ? 
+        ORDER BY id ASC
+      `, [projId]);
+      res.json(mensagensSimples);
+    } catch (err2) {
+      console.error("❌ Erro ao carregar mensagens:", err2.message);
+      res.status(500).json({ error: "Erro ao carregar mensagens", details: err2.message });
     }
   }
 };
