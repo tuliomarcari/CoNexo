@@ -218,11 +218,11 @@ onMounted(() => {
 
       <!-- Menu mobile -->
       <div class="cx-nav-mobile" :class="{ 'cx-nav-mobile--open': menuMobileAberto }">
-        <button class="cx-nav-mobile__link" @click="navegar('home')">🏠 Início</button>
-        <button class="cx-nav-mobile__link" @click="navegar('publicar')">🚀 Projetos</button>
-        <button class="cx-nav-mobile__link" @click="navegar('ideias')">💡 Ideias</button>
-        <button class="cx-nav-mobile__link cx-nav-mobile__link--primary" @click="navegar('criar-loja')">🏪 Criar Loja</button>
-        <button v-if="usuarioLogado?.nivel === 'admin'" class="cx-nav-mobile__link cx-nav-mobile__link--admin" @click="navegar('admin')">⚡ Admin</button>
+        <button class="cx-nav-mobile__link" @click="navegar('home')">Início</button>
+        <button class="cx-nav-mobile__link" @click="navegar('publicar')">Projetos</button>
+        <button class="cx-nav-mobile__link" @click="navegar('ideias')">Ideias</button>
+        <button class="cx-nav-mobile__link cx-nav-mobile__link--primary" @click="navegar('criar-loja')">Criar Loja</button>
+        <button v-if="usuarioLogado?.nivel === 'admin'" class="cx-nav-mobile__link cx-nav-mobile__link--admin" @click="navegar('admin')">Admin</button>
         
         <div class="cx-nav-mobile__divider"></div>
 
@@ -234,12 +234,12 @@ onMounted(() => {
               <span class="cx-user__email-mobile" v-if="usuarioLogado.email">{{ usuarioLogado.email }}</span>
             </div>
           </div>
-          <button class="cx-nav-mobile__link cx-nav-mobile__link--messages" @click="abrirCentralConversas(); menuMobileAberto = false;">💬 Central de Mensagens</button>
-          <button class="cx-nav-mobile__link cx-nav-mobile__link--danger" @click="deslogar">🚪 Sair da conta</button>
+          <button class="cx-nav-mobile__link cx-nav-mobile__link--messages" @click="abrirCentralConversas(); menuMobileAberto = false;">Central de Mensagens</button>
+          <button class="cx-nav-mobile__link cx-nav-mobile__link--danger" @click="deslogar">Sair da conta</button>
         </template>
         <template v-else>
-          <button class="cx-nav-mobile__link" @click="navegar('login')">🔑 Entrar</button>
-          <button class="cx-nav-mobile__link cx-nav-mobile__link--cta" @click="navegar('cadastro')">✨ Criar conta gratuita</button>
+          <button class="cx-nav-mobile__link" @click="navegar('login')">Entrar</button>
+          <button class="cx-nav-mobile__link cx-nav-mobile__link--cta" @click="navegar('cadastro')">Criar conta gratuita</button>
         </template>
       </div>
     </header>
