@@ -18,12 +18,22 @@ const menuMobileAberto = ref(false);
 
 const carregarDados = async () => {
   try {
-    const [resP, resI] = await Promise.all([
+    const [resP, resI] = await Promise.allSettled([
       axios.get(`${API_URL}/projetos`),
       axios.get(`${API_URL}/ideias`)
     ]);
-    listaProjetos.value = resP.data;
-    listaIdeias.value = resI.data;
+
+    if (resP.status === 'fulfilled') {
+      listaProjetos.value = resP.value.data;
+    } else {
+      console.error("Erro ao carregar projetos:", resP.reason);
+    }
+
+    if (resI.status === 'fulfilled') {
+      listaIdeias.value = resI.value.data;
+    } else {
+      console.error("Erro ao carregar ideias:", resI.reason);
+    }
   } catch (err) { console.error("Erro ao carregar:", err); }
 };
 
