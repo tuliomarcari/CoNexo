@@ -8,6 +8,7 @@ import Ideias from './components/Ideias.vue';
 import Login from './components/Login.vue';
 import Cadastro from './components/Cadastro.vue';
 import AdminPainel from './components/AdminPainel.vue';
+import CriarLojaView from './components/CriarLojaView.vue';
 
 const paginaAtual = ref('home');
 const listaProjetos = ref([]);
@@ -132,6 +133,13 @@ onMounted(() => {
             @click="navegar('ideias')"
           >Ideias</button>
 
+          <!-- Nova Aba: Criar Loja -->
+          <button
+            class="cx-nav__link"
+            :class="{ 'cx-nav__link--active': paginaAtual === 'criar-loja' }"
+            @click="navegar('criar-loja')"
+          >Criar Loja</button>
+
           <button
             v-if="usuarioLogado?.nivel === 'admin'"
             class="cx-nav__link cx-nav__link--admin"
@@ -174,6 +182,7 @@ onMounted(() => {
         <button class="cx-nav-mobile__link" @click="navegar('home')">Início</button>
         <button class="cx-nav-mobile__link" @click="navegar('publicar')">Projetos</button>
         <button class="cx-nav-mobile__link" @click="navegar('ideias')">Ideias</button>
+        <button class="cx-nav-mobile__link cx-nav-mobile__link--primary" @click="navegar('criar-loja')">Criar Loja</button>
         <button v-if="usuarioLogado?.nivel === 'admin'" class="cx-nav-mobile__link" @click="navegar('admin')">Admin</button>
         <div class="cx-nav-mobile__divider"></div>
         <template v-if="usuarioLogado">
@@ -214,6 +223,10 @@ onMounted(() => {
         :user="usuarioLogado"
         @nova-ideia="adicionarIdeia"
         @excluir="id => deletarItem('ideia', id)"
+      />
+      <CriarLojaView
+        v-if="paginaAtual === 'criar-loja'"
+        :user="usuarioLogado"
       />
       <AdminPainel v-if="paginaAtual === 'admin'" @dados-atualizados="carregarDados" />
     </main>

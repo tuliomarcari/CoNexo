@@ -128,7 +128,6 @@ const configurarCors = () => {
   const lista = origensPermitidas.split(',').map(o => o.trim()).filter(Boolean);
   return cors({
     origin: (origin, callback) => {
-      // Permite requisições sem origin (ex: Postman, curl, apps mobile)
       if (!origin || lista.includes(origin)) {
         callback(null, true);
       } else {
@@ -170,7 +169,7 @@ const inicializarBanco = async () => {
         nivel VARCHAR(50) DEFAULT 'cliente'
       )
     `);
-    
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS projetos (
         id INT AUTO_INCREMENT PRIMARY KEY, 
@@ -199,6 +198,19 @@ const inicializarBanco = async () => {
       )
     `);
 
+    // NOVA TABELA: Suporte ao CoNexo Builder / Criar Loja
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lojas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nome_loja VARCHAR(255),
+        usuario_id INT,
+        banner_estilo VARCHAR(50),
+        vitrine_estilo VARCHAR(50),
+        rodape_estilo VARCHAR(50),
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // 2. MIGRAÇÃO: Força a criação da coluna 'status' se a tabela já existia sem ela
     try {
       await pool.query("ALTER TABLE projetos ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'");
@@ -215,8 +227,8 @@ const inicializarBanco = async () => {
     }
 
     console.log("✅ Banco de dados pronto e atualizado!");
-  } catch (err) { 
-    console.error("❌ Erro inicialização:", err.message); 
+  } catch (err) {
+    console.error("❌ Erro inicialização:", err.message);
   }
 };
 
@@ -268,9 +280,9 @@ app.post("/projetos", async (req, res) => {
     }
 
     res.json({ message: "Projeto enviado para análise!" });
-  } catch (err) { 
+  } catch (err) {
     console.error("Erro ao cadastrar projeto:", err);
-    res.status(500).json({ error: "Erro interno do servidor" }); 
+    res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
 
@@ -285,9 +297,26 @@ app.post("/ideias", async (req, res) => {
     }
 
     res.json({ message: "Ideia enviada!" });
-  } catch (err) { 
+  } catch (err) {
     console.error("Erro ao cadastrar ideia:", err);
-    res.status(500).json({ error: "Erro interno do servidor" }); 
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// NOVA ROTA: Salvar personalização do CoNexo Builder
+app.post("/lojas", async (req, res) => {
+  const { nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo } = req.body;
+  try {
+    await pool.query(
+      `INSERT INTO lojas (nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [nome_loja || 'Minha Loja CoNexo', usuario_id || null, banner_estilo, vitrine_estilo, rodape_estilo]
+    );
+
+    res.json({ message: "Configuração da loja salva com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao salvar loja:", err);
+    res.status(500).json({ error: "Erro interno do servidor ao salvar loja" });
   }
 });
 
@@ -296,9 +325,9 @@ app.get("/projetos", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM projetos WHERE status = 'aprovado' ORDER BY id DESC");
     res.json(rows);
-  } catch (err) { 
+  } catch (err) {
     console.error("Erro ao listar projetos:", err);
-    res.status(500).json({ error: "Erro interno do servidor" }); 
+    res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
 
@@ -306,18 +335,13 @@ app.get("/ideias", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM ideias WHERE status = 'aprovado' ORDER BY id DESC");
     res.json(rows);
-  } catch (err) { 
+  } catch (err) {
     console.error("Erro ao listar ideias:", err);
-    res.status(500).json({ error: "Erro interno do servidor" }); 
+    res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
 
 // --- MIDDLEWARES DE AUTENTICAÇÃO E AUTORIZAÇÃO ---
-
-/**
- * autenticarToken: valida o JWT enviado no header Authorization: Bearer <token>
- * Se válido, adiciona o payload em req.usuario e chama next().
- */
 const autenticarToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -335,10 +359,6 @@ const autenticarToken = (req, res, next) => {
   }
 };
 
-/**
- * exigirAdmin: garante que o usuário autenticado possui nivel === 'admin'.
- * Deve ser usado após autenticarToken.
- */
 const exigirAdmin = (req, res, next) => {
   if (!req.usuario || req.usuario.nivel !== 'admin') {
     return res.status(403).json({ error: "Acesso negado" });
@@ -352,15 +372,15 @@ app.get("/admin/pendentes", autenticarToken, exigirAdmin, async (req, res) => {
     const [projetos] = await pool.query("SELECT *, 'projeto' as tipo_item FROM projetos WHERE status = 'pendente'");
     const [ideias] = await pool.query("SELECT *, 'ideia' as tipo_item FROM ideias WHERE status = 'pendente'");
     res.json([...projetos, ...ideias]);
-  } catch (err) { 
-    res.status(500).json({ error: "Erro ao buscar pendentes" }); 
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao buscar pendentes" });
   }
 });
 
 app.put("/admin/aprovar/:id", autenticarToken, exigirAdmin, async (req, res) => {
   const { id } = req.params;
-  const { tipo } = req.body; // 'projeto' ou 'ideia'
-  
+  const { tipo } = req.body;
+
   if (!tipo) {
     return res.status(400).json({ error: "Tipo do item não especificado." });
   }
@@ -369,7 +389,6 @@ app.put("/admin/aprovar/:id", autenticarToken, exigirAdmin, async (req, res) => 
     let emailDestino = null;
     let tituloItem = "";
 
-    // Buscar informações de contato/publicação antes de aprovar
     if (tipo === 'projeto') {
       const [rows] = await pool.query("SELECT email_contato, empresa FROM projetos WHERE id = ?", [id]);
       if (rows.length > 0) {
@@ -394,9 +413,9 @@ app.put("/admin/aprovar/:id", autenticarToken, exigirAdmin, async (req, res) => 
     }
 
     res.json({ message: "Aprovado com sucesso!" });
-  } catch (err) { 
+  } catch (err) {
     console.error("Erro ao aprovar pendente:", err);
-    res.status(500).json({ error: "Erro interno do servidor" }); 
+    res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
 
@@ -404,9 +423,9 @@ app.delete("/projetos/:id", autenticarToken, exigirAdmin, async (req, res) => {
   try {
     await pool.query("DELETE FROM projetos WHERE id = ?", [req.params.id]);
     res.json({ message: "Projeto removido!" });
-  } catch (err) { 
+  } catch (err) {
     console.error("Erro ao remover projeto:", err);
-    res.status(500).json({ error: "Erro interno do servidor" }); 
+    res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
 
@@ -414,9 +433,9 @@ app.delete("/ideias/:id", autenticarToken, exigirAdmin, async (req, res) => {
   try {
     await pool.query("DELETE FROM ideias WHERE id = ?", [req.params.id]);
     res.json({ message: "Ideia removida!" });
-  } catch (err) { 
+  } catch (err) {
     console.error("Erro ao remover ideia:", err);
-    res.status(500).json({ error: "Erro interno do servidor" }); 
+    res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
 
@@ -431,9 +450,8 @@ app.post("/login", async (req, res) => {
   const emailNormalizado = email.trim().toLowerCase();
 
   try {
-    // Buscar usuário apenas pelo e-mail
     const [rows] = await pool.query("SELECT * FROM usuarios WHERE email = ?", [emailNormalizado]);
-    
+
     if (rows.length === 0) {
       return res.status(401).json({ error: "E-mail ou senha inválidos" });
     }
@@ -442,18 +460,14 @@ app.post("/login", async (req, res) => {
     let senhaCorreta = false;
     const senhaSalva = usuario.senha;
 
-    // Critério simples para identificar hash bcrypt ($2a$, $2b$, $2y$)
     const ehBcrypt = senhaSalva && (senhaSalva.startsWith("$2a$") || senhaSalva.startsWith("$2b$") || senhaSalva.startsWith("$2y$"));
 
     if (ehBcrypt) {
       senhaCorreta = await bcrypt.compare(senha, senhaSalva);
     } else {
-      // COMPATIBILIDADE TEMPORÁRIA: Se a senha no banco não for hash, compara a string legada direta.
-      // NOTA: Esta compatibilidade é provisória e deve ser removida após a migração de toda a base.
       senhaCorreta = (senha === senhaSalva);
 
       if (senhaCorreta) {
-        // Se a senha plaintext legada estiver correta, gera imediatamente o hash seguro e atualiza o banco
         try {
           const saltRounds = 10;
           const novoHash = await bcrypt.hash(senha, saltRounds);
@@ -469,7 +483,6 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "E-mail ou senha inválidos" });
     }
 
-    // Gerar token JWT com dados mínimos (nunca incluir senha ou hash)
     const tokenPayload = {
       id: usuario.id,
       email: usuario.email,
@@ -477,7 +490,6 @@ app.post("/login", async (req, res) => {
     };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
-    // Retornar token e dados básicos do usuário (sem senha)
     res.json({
       message: "Login realizado com sucesso",
       token,
@@ -488,9 +500,9 @@ app.post("/login", async (req, res) => {
         nivel: usuario.nivel
       }
     });
-  } catch (err) { 
+  } catch (err) {
     console.error("Erro ao realizar login:", err);
-    res.status(500).json({ error: "Erro interno do servidor" }); 
+    res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
 
