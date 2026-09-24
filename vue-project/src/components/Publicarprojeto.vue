@@ -709,15 +709,15 @@ const fecharChat = () => {
   background: var(--cx-surface);
   border: 1px solid var(--cx-border);
   border-radius: var(--cx-radius-xl);
-  padding: var(--cx-space-4) var(--cx-space-5);
+  padding: var(--cx-space-5) var(--cx-space-6);
   margin-bottom: var(--cx-space-6);
   flex-wrap: wrap;
 }
 
 .filter-group {
   display: flex;
-  align-items: center;
-  gap: var(--cx-space-3);
+  align-items: flex-end;
+  gap: var(--cx-space-4);
   flex: 1;
   flex-wrap: wrap;
 }
@@ -725,22 +725,26 @@ const fecharChat = () => {
 .filter-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
-  min-width: 130px;
+  min-width: 140px;
 }
 
 .filter-item label {
+  display: block;
   font-size: var(--cx-text-xs);
   font-weight: 700;
   text-transform: uppercase;
   color: var(--cx-text-muted);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+  line-height: 1;
 }
 
 .filter-item select {
   width: 100%;
-  padding: 8px 10px;
+  height: 42px;
+  padding: 0 12px;
   border: 1px solid var(--cx-border);
   border-radius: var(--cx-radius-md);
   font-size: var(--cx-text-sm);
@@ -748,24 +752,31 @@ const fecharChat = () => {
   color: var(--cx-text);
   background: var(--cx-bg);
   box-sizing: border-box;
+  transition: border-color var(--cx-transition-fast), box-shadow var(--cx-transition-fast);
 }
 
 .filter-item select:focus {
   outline: none;
   border-color: var(--cx-primary);
+  box-shadow: 0 0 0 3px var(--cx-primary-alpha);
 }
 
 .filter-reset-btn {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #fef2f2;
   color: #b91c1c;
   border: 1px solid #fecaca;
-  padding: 8px 14px;
+  padding: 0 16px;
   border-radius: var(--cx-radius-md);
   font-size: var(--cx-text-xs);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
   transition: all var(--cx-transition-fast);
+  margin-top: auto;
 }
 
 .filter-reset-btn:hover {
@@ -795,11 +806,14 @@ const fecharChat = () => {
     flex-direction: column;
     align-items: stretch;
     padding: var(--cx-space-4);
+    gap: var(--cx-space-4);
   }
 
   .filter-group {
     flex-direction: column;
+    align-items: stretch;
     width: 100%;
+    gap: var(--cx-space-3);
   }
 
   .filter-item {
@@ -809,8 +823,8 @@ const fecharChat = () => {
 
   .filter-reset-btn {
     width: 100%;
+    height: 42px;
     text-align: center;
-    padding: 10px;
     margin-top: 4px;
   }
 
