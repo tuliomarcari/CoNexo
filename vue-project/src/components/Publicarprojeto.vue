@@ -38,7 +38,7 @@
                 <input id="proj-nicho" v-model="novo.nicho" type="text" placeholder="Ex: Saúde, Tecnologia, Varejo" required />
               </div>
 
-              <!-- SELETOR DE IMAGEM VIA DOCUMENTOS -->
+              <!-- SELETOR DE IMAGEM OTIMIZADO -->
               <div class="cx-field">
                 <label for="proj-file">Foto / Logótipo do Local (Anexo)</label>
                 <input 
@@ -85,9 +85,7 @@
                 <input id="proj-tel" v-model="novo.telefone" type="text" placeholder="+55 11 90000-0000" />
               </div>
 
-              <button type="submit" class="cx-submit" :disabled="salvando">
-                {{ salvando ? 'Enviando projeto...' : 'Publicar projeto' }}
-              </button>
+              <button type="submit" class="cx-submit">Publicar projeto</button>
             </form>
           </div>
         </aside>
@@ -218,19 +216,47 @@ const mensagens = ref([]);
 const novaMensagem = ref('');
 const chatBodyRef = ref(null);
 
+// Função de redimensionamento e compressão inteligente via Canvas
 const selecionarImagemDocumento = (event) => {
   const file = event.target.files[0];
   if (!file) return;
 
-  if (file.size > 2 * 1024 * 1024) {
-    alert("O ficheiro é demasiado grande. Escolha uma imagem menor que 2MB.");
+  if (!file.type.startsWith('image/')) {
+    alert("Por favor, selecione um arquivo de imagem válido.");
     event.target.value = '';
     return;
   }
 
   const reader = new FileReader();
   reader.onload = (e) => {
-    novo.value.imagem_url = e.target.result;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      const MAX_SIZE = 800;
+      if (width > height) {
+        if (width > MAX_SIZE) {
+          height *= MAX_SIZE / width;
+          width = MAX_SIZE;
+        }
+      } else {
+        if (height > MAX_SIZE) {
+          width *= MAX_SIZE / height;
+          height = MAX_SIZE;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Compacta para JPEG com qualidade 0.7 para garantir envio perfeito
+      novo.value.imagem_url = canvas.toDataURL('image/jpeg', 0.7);
+    };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 };
@@ -241,36 +267,23 @@ const removerImagemAnexada = () => {
   if (fileInput) fileInput.value = '';
 };
 
-const salvando = ref(false);
-
 const enviarProjeto = () => {
-  if (salvando.value) return;
-  salvando.value = true;
-
   const projetoFinal = {
     ...novo.value,
-    usuario_id: props.user?.id || null,
+    usuario_id: props.user?.id,
     status: 'pendente'
   };
-
-  if (!projetoFinal.email_contato && props.user?.email) {
-    projetoFinal.email_contato = props.user.email;
-  }
-
-  emit('salvar', projetoFinal, (sucesso) => {
-    salvando.value = false;
-    if (sucesso) {
-      Object.keys(novo.value).forEach(key => novo.value[key] = '');
-      removerImagemAnexada();
-    }
-  });
+  emit('salvar', projetoFinal);
+  Object.keys(novo.value).forEach(key => novo.value[key] = '');
+  removerImagemAnexada();
+  alert("Projeto enviado com sucesso! Ele aparecerá na lista assim que o administrador aprová-lo.");
 };
 
 // Funções de Chat
 const abrirChat = async (projeto) => {
   const token = localStorage.getItem('token');
   if (!token) {
-    alert("Você precisa estar conectado para conversar com o autor do projeto.");
+    alert("Você estar conectado para conversar com o autor do projeto.");
     return;
   }
 

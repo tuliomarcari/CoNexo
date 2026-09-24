@@ -141,8 +141,9 @@ const configurarCors = () => {
 };
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// Aumentado para 50mb para suportar imagens em Base64 grandes sem truncar
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(configurarCors());
 
 const pool = mysql.createPool({
@@ -470,7 +471,7 @@ app.post("/lojas", async (req, res) => {
     res.json({ message: "Configuração da loja salva com sucesso!" });
   } catch (err) {
     console.error("Erro ao salvar loja:", err);
-    res.status(500).json({ error: "Erro interno do servidor ao salvar loja" });
+    res.status(500).json({ error: "Erro interno ao salvar loja" });
   }
 });
 
