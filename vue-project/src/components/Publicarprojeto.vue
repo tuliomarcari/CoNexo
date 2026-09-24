@@ -111,16 +111,65 @@
         <section class="page-list-col" aria-labelledby="list-title">
           <h2 id="list-title" class="page-list-title">Projetos publicados</h2>
 
-          <div v-if="projetos.length === 0" class="cx-empty">
+          <!-- BARRA DE FILTROS DE PROJETOS -->
+          <div class="filter-bar">
+            <div class="filter-group">
+              <!-- Filtro UF -->
+              <div class="filter-item">
+                <label for="filter-uf">Estado</label>
+                <select id="filter-uf" v-model="filtroUF" @change="carregarCidadesFiltroUF">
+                  <option value="">Todos os Estados</option>
+                  <option v-for="uf in estadosBR" :key="uf.sigla" :value="uf.sigla">
+                    {{ uf.nome }} ({{ uf.sigla }})
+                  </option>
+                </select>
+              </div>
+
+              <!-- Filtro Cidade -->
+              <div class="filter-item">
+                <label for="filter-cidade">Cidade</label>
+                <select id="filter-cidade" v-model="filtroCidade" :disabled="!filtroUF || carregandoCidadesFiltro">
+                  <option value="">Todas as Cidades</option>
+                  <option v-for="cid in cidadesFiltro" :key="cid" :value="cid">
+                    {{ cid }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- Filtro Nicho -->
+              <div class="filter-item">
+                <label for="filter-nicho">Nicho</label>
+                <select id="filter-nicho" v-model="filtroNicho">
+                  <option value="">Todos os Nichos</option>
+                  <option v-for="nicho in nichosMercado" :key="nicho" :value="nicho">
+                    {{ nicho }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Botão de Limpar Filtros -->
+            <button 
+              v-if="filtroUF || filtroCidade || filtroNicho" 
+              @click="limparFiltros" 
+              class="filter-reset-btn"
+              title="Limpar filtros"
+            >
+              ✕ Limpar Filtros
+            </button>
+          </div>
+
+          <div v-if="projetosFiltrados.length === 0" class="cx-empty">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="36" height="36" aria-hidden="true">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
               <polyline points="9 22 9 12 15 12 15 22"/>
             </svg>
-            <p>Nenhum projeto publicado ainda. Seja o primeiro.</p>
+            <p v-if="filtroUF || filtroCidade || filtroNicho">Nenhum projeto encontrado para os filtros selecionados.</p>
+            <p v-else>Nenhum projeto publicado ainda. Seja o primeiro.</p>
           </div>
 
-          <div class="project-list">
-            <article class="project-item" v-for="p in projetos" :key="p.id">
+          <div class="project-list" v-else>
+            <article class="project-item" v-for="p in projetosFiltrados" :key="p.id">
               
               <div v-if="p.imagem_url" class="project-item__img-container">
                 <img :src="p.imagem_url" :alt="p.empresa" class="project-item__img" />
@@ -206,7 +255,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import axios from 'axios';
 import { API_URL } from '../config';
 
@@ -291,6 +340,50 @@ const carregarCidadesPorUF = async () => {
     carregandoCidades.value = false;
   }
 };
+
+// Estados e lógica dos Filtros de Projetos
+const filtroUF = ref('');
+const filtroCidade = ref('');
+const filtroNicho = ref('');
+const cidadesFiltro = ref([]);
+const carregandoCidadesFiltro = ref(false);
+
+const carregarCidadesFiltroUF = async () => {
+  filtroCidade.value = '';
+  cidadesFiltro.value = [];
+
+  if (!filtroUF.value) return;
+
+  carregandoCidadesFiltro.value = true;
+  try {
+    const res = await axios.get(
+      `https://servicodados.ibge.gov.br/api/v1/localidades/estados/${filtroUF.value}/municipios?orderBy=nome`
+    );
+    cidadesFiltro.value = res.data.map(c => c.nome);
+  } catch (err) {
+    console.error("Erro ao carregar cidades do filtro IBGE:", err);
+  } finally {
+    carregandoCidadesFiltro.value = false;
+  }
+};
+
+const limparFiltros = () => {
+  filtroUF.value = '';
+  filtroCidade.value = '';
+  filtroNicho.value = '';
+  cidadesFiltro.value = [];
+};
+
+const projetosFiltrados = computed(() => {
+  if (!props.projetos) return [];
+  return props.projetos.filter(p => {
+    const matchUF = !filtroUF.value || (p.estado && p.estado.toUpperCase() === filtroUF.value.toUpperCase());
+    const matchCidade = !filtroCidade.value || (p.cidade && p.cidade.toLowerCase() === filtroCidade.value.toLowerCase());
+    const matchNicho = !filtroNicho.value || (p.nicho && p.nicho.toLowerCase() === filtroNicho.value.toLowerCase());
+
+    return matchUF && matchCidade && matchNicho;
+  });
+});
 
 // Estados do Chat
 const chatAtivo = ref(false);
@@ -579,4 +672,76 @@ const fecharChat = () => {
   cursor: pointer;
 }
 .cx-btn-primary:hover { background: var(--cx-primary-dark); }
+
+/* ESTILOS DA BARRA DE FILTROS DE PROJETOS */
+.filter-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--cx-space-4);
+  background: var(--cx-surface);
+  border: 1px solid var(--cx-border);
+  border-radius: var(--cx-radius-xl);
+  padding: var(--cx-space-4) var(--cx-space-5);
+  margin-bottom: var(--cx-space-6);
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-3);
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 130px;
+}
+
+.filter-item label {
+  font-size: var(--cx-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--cx-text-muted);
+  letter-spacing: 0.04em;
+}
+
+.filter-item select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--cx-border);
+  border-radius: var(--cx-radius-md);
+  font-size: var(--cx-text-sm);
+  font-family: var(--cx-font-sans);
+  color: var(--cx-text);
+  background: var(--cx-bg);
+  box-sizing: border-box;
+}
+
+.filter-item select:focus {
+  outline: none;
+  border-color: var(--cx-primary);
+}
+
+.filter-reset-btn {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  padding: 8px 14px;
+  border-radius: var(--cx-radius-md);
+  font-size: var(--cx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--cx-transition-fast);
+}
+
+.filter-reset-btn:hover {
+  background: #fee2e2;
+}
 </style>
