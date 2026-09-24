@@ -198,7 +198,7 @@ const inicializarBanco = async () => {
       )
     `);
 
-    // TABELA: CoNexo Builder / Criar Loja (incluindo as três cores)
+    // TABELA: CoNexo Builder / Criar Loja
     await pool.query(`
       CREATE TABLE IF NOT EXISTS lojas (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -214,7 +214,7 @@ const inicializarBanco = async () => {
       )
     `);
 
-    // 2. MIGRAÇÕES AUTOMÁTICAS (Garante suporte a bancos de dados já existentes)
+    // 2. MIGRAÇÕES AUTOMÁTICAS
     try {
       await pool.query("ALTER TABLE projetos ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'");
       console.log("🆕 Coluna status adicionada em projetos!");
@@ -397,6 +397,25 @@ app.get("/admin/pendentes", autenticarToken, exigirAdmin, async (req, res) => {
     res.json([...projetos, ...ideias]);
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar pendentes" });
+  }
+});
+
+// ROTA ADMIN: Listar lojas e vitrines criadas pelos usuários
+app.get("/admin/lojas", autenticarToken, exigirAdmin, async (req, res) => {
+  try {
+    const [lojas] = await pool.query(`
+      SELECT 
+        l.*, 
+        u.nome AS usuario_nome, 
+        u.email AS usuario_email 
+      FROM lojas l
+      LEFT JOIN usuarios u ON l.usuario_id = u.id
+      ORDER BY l.id DESC
+    `);
+    res.json(lojas);
+  } catch (err) {
+    console.error("Erro ao buscar lojas no admin:", err);
+    res.status(500).json({ error: "Erro ao buscar solicitações de lojas" });
   }
 });
 

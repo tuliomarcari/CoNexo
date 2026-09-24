@@ -34,6 +34,20 @@
           <span v-if="ideiasPendentes.length > 0" class="admin-nav__badge">{{ ideiasPendentes.length }}</span>
         </button>
 
+        <!-- NOVA ABA: Solicitações de Lojas (CoNexo Builder) -->
+        <button
+          class="admin-nav__item"
+          :class="{ 'admin-nav__item--active': abaAtiva === 'lojas' }"
+          @click="abaAtiva = 'lojas'"
+        >
+          <svg class="admin-nav__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          Solicitações de Lojas
+          <span v-if="lojasCadastradas.length > 0" class="admin-nav__badge">{{ lojasCadastradas.length }}</span>
+        </button>
+
         <button
           class="admin-nav__item"
           :class="{ 'admin-nav__item--active': abaAtiva === 'negociacoes' }"
@@ -63,7 +77,7 @@
                  : 'Revise e aprove as ideias submetidas pela comunidade.' }}
             </p>
           </div>
-          <button class="admin-refresh" @click="carregarPendentes" title="Atualizar lista" aria-label="Atualizar lista de pendentes">
+          <button class="admin-refresh" @click="carregarDadosAdmin" title="Atualizar lista" aria-label="Atualizar lista de pendentes">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
               <polyline points="23 4 23 10 17 10"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -128,6 +142,73 @@
         </div>
       </section>
 
+      <!-- ABA: Solicitações de Lojas (CoNexo Builder) -->
+      <section v-if="abaAtiva === 'lojas'" class="admin-section">
+        <div class="admin-section__head">
+          <div>
+            <h1 class="admin-section__title">Lojas / Vitrines Criadas</h1>
+            <p class="admin-section__sub">Modelos e configurações de lojas virtuais geradas no CoNexo Builder.</p>
+          </div>
+          <button class="admin-refresh" @click="carregarDadosAdmin" title="Atualizar lista">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <polyline points="23 4 23 10 17 10"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Atualizar
+          </button>
+        </div>
+
+        <div v-if="lojasCadastradas.length === 0" class="admin-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="36" height="36">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          </svg>
+          <p>Nenhuma solicitação de loja registrada até o momento.</p>
+        </div>
+
+        <div class="admin-grid" v-else>
+          <article class="admin-card" v-for="loja in lojasCadastradas" :key="loja.id">
+            <header class="admin-card__head">
+              <div class="admin-card__meta">
+                <span class="admin-card__tipo admin-card__tipo--loja">Loja Builder</span>
+              </div>
+              <span class="admin-card__loc">ID: #{{ loja.id }}</span>
+            </header>
+
+            <h2 class="admin-card__title">{{ loja.nome_loja }}</h2>
+            
+            <div class="admin-loja-info">
+              <p><strong>Cliente:</strong> {{ loja.usuario_nome || 'Visitante (Anônimo)' }}</p>
+              <p><strong>E-mail:</strong> {{ loja.usuario_email || 'Não informado' }}</p>
+              <p><strong>Banner:</strong> {{ loja.banner_estilo }}</p>
+              <p><strong>Vitrine:</strong> {{ loja.vitrine_estilo }}</p>
+              <p><strong>Rodapé:</strong> {{ loja.rodape_estilo }}</p>
+            </div>
+
+            <!-- Paleta de Cores Selecionada -->
+            <div class="admin-card__financial">
+              <div class="admin-card__financial-item">
+                <span>Cores da Loja</span>
+                <div class="color-palette-preview">
+                  <span class="color-swatch" :style="{ backgroundColor: loja.cor_primaria }" :title="'Primária: ' + loja.cor_primaria"></span>
+                  <span class="color-swatch" :style="{ backgroundColor: loja.cor_secundaria }" :title="'Secundária: ' + loja.cor_secundaria"></span>
+                  <span class="color-swatch" :style="{ backgroundColor: loja.cor_terciaria }" :title="'Terciária: ' + loja.cor_terciaria"></span>
+                </div>
+              </div>
+            </div>
+
+            <footer class="admin-card__foot">
+              <a 
+                v-if="loja.usuario_email" 
+                :href="`mailto:${loja.usuario_email}?subject=CoNexo Builder - Sua Loja ${loja.nome_loja}`" 
+                class="admin-btn admin-btn--approve text-center"
+              >
+                Enviar E-mail
+              </a>
+            </footer>
+          </article>
+        </div>
+      </section>
+
       <!-- Negociações -->
       <section v-if="abaAtiva === 'negociacoes'" class="admin-section">
         <div class="admin-section__head">
@@ -155,6 +236,7 @@ import { API_URL } from '../config';
 
 const abaAtiva = ref('projetos');
 const pendentes = ref([]);
+const lojasCadastradas = ref([]);
 const erroAcesso = ref('');
 
 const projetosPendentes = computed(() => pendentes.value.filter(p => p.tipo_item === 'projeto'));
@@ -183,7 +265,7 @@ const tratarErroAdmin = (err) => {
   }
 };
 
-const carregarPendentes = async () => {
+const carregarDadosAdmin = async () => {
   erroAcesso.value = '';
   const headers = getAuthHeaders();
   if (!headers) {
@@ -191,11 +273,15 @@ const carregarPendentes = async () => {
     return;
   }
   try {
-    const res = await axios.get(`${API_URL}/admin/pendentes`, { headers });
-    pendentes.value = res.data;
+    const [resPendentes, resLojas] = await Promise.all([
+      axios.get(`${API_URL}/admin/pendentes`, { headers }),
+      axios.get(`${API_URL}/admin/lojas`, { headers })
+    ]);
+    pendentes.value = resPendentes.data;
+    lojasCadastradas.value = resLojas.data;
   } catch (err) {
     tratarErroAdmin(err);
-    console.error("Erro ao buscar pendentes:", err);
+    console.error("Erro ao carregar dados do admin:", err);
   }
 };
 
@@ -205,7 +291,7 @@ const aprovar = async (item) => {
   if (!headers) { erroAcesso.value = 'Sessão não encontrada. Faça login novamente.'; return; }
   try {
     await axios.put(`${API_URL}/admin/aprovar/${item.id}`, { tipo: item.tipo_item }, { headers });
-    await carregarPendentes();
+    await carregarDadosAdmin();
     emit('dados-atualizados');
   } catch (err) {
     tratarErroAdmin(err);
@@ -219,14 +305,14 @@ const rejeitar = async (item) => {
   try {
     const rota = item.tipo_item === 'projeto' ? 'projetos' : 'ideias';
     await axios.delete(`${API_URL}/${rota}/${item.id}`, { headers });
-    await carregarPendentes();
+    await carregarDadosAdmin();
     emit('dados-atualizados');
   } catch (err) {
     tratarErroAdmin(err);
   }
 };
 
-onMounted(carregarPendentes);
+onMounted(carregarDadosAdmin);
 </script>
 
 <style scoped>
@@ -492,6 +578,11 @@ onMounted(carregarPendentes);
   color: var(--cx-primary-dark);
 }
 
+.admin-card__tipo--loja {
+  background: #fef3c7;
+  color: #d97706;
+}
+
 .admin-card__nicho {
   font-size: var(--cx-text-xs);
   color: var(--cx-text-muted);
@@ -512,15 +603,26 @@ onMounted(carregarPendentes);
   line-height: 1.3;
 }
 
-.admin-card__desc {
+.admin-loja-info {
   font-size: var(--cx-text-sm);
   color: var(--cx-text-2);
-  line-height: 1.7;
-  flex: 1;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.color-palette-preview {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--cx-border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .admin-card__financial {
@@ -545,16 +647,14 @@ onMounted(carregarPendentes);
   font-weight: 600;
 }
 
-.admin-card__financial-item strong {
-  font-size: var(--cx-text-lg);
-  font-weight: 800;
-  color: var(--cx-text);
-  letter-spacing: -0.02em;
-}
-
 .admin-card__foot {
   display: flex;
   gap: var(--cx-space-3);
+}
+
+.text-center {
+  text-align: center;
+  text-decoration: none;
 }
 
 /* Botões de ação */
