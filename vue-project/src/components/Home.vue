@@ -104,6 +104,24 @@
 
         <div class="projects__grid" v-else>
           <article class="project-card" v-for="(p, i) in projetos" :key="i">
+            <!-- Imagem do Projeto / Logótipo com Fallback -->
+            <div class="project-card__img-container" :class="{ 'project-card__img-container--placeholder': !(p.imagem_url || p.foto_url || p.imagem) }">
+              <img 
+                v-if="p.imagem_url || p.foto_url || p.imagem" 
+                :src="p.imagem_url || p.foto_url || p.imagem" 
+                :alt="p.empresa" 
+                class="project-card__img" 
+              />
+              <template v-else>
+                <div class="project-card__placeholder-icon" aria-hidden="true">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M12 2.5L21 7.5V16.5L12 21.5L3 16.5V7.5L12 2.5Z" stroke="currentColor" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <span class="project-card__placeholder-text">{{ p.empresa }}</span>
+              </template>
+            </div>
+
             <header class="project-card__head">
               <span class="project-card__badge">{{ p.nicho || 'Geral' }}</span>
               <span class="project-card__location">{{ p.cidade }}, {{ p.estado }}</span>
@@ -523,12 +541,62 @@ onUnmounted(() => {
   padding: var(--cx-space-6);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   transition: box-shadow var(--cx-transition-base), border-color var(--cx-transition-base);
 }
 
 .project-card:hover {
   box-shadow: var(--cx-shadow-lg);
   border-color: rgba(13,156,110,0.2);
+}
+
+.project-card__img-container {
+  width: calc(100% + 2 * var(--cx-space-6));
+  margin: calc(-1 * var(--cx-space-6)) calc(-1 * var(--cx-space-6)) var(--cx-space-4) calc(-1 * var(--cx-space-6));
+  height: 180px;
+  overflow: hidden;
+  position: relative;
+  background: var(--cx-bg-alt);
+}
+
+.project-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.35s ease;
+}
+
+.project-card:hover .project-card__img {
+  transform: scale(1.05);
+}
+
+.project-card__img-container--placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(15, 23, 42, 0.9));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.project-card__placeholder-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.project-card__placeholder-text {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.02em;
 }
 
 .project-card__head {
