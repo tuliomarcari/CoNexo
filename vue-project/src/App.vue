@@ -9,12 +9,25 @@ import Login from './components/Login.vue';
 import Cadastro from './components/Cadastro.vue';
 import AdminPainel from './components/AdminPainel.vue';
 import CriarLojaView from './components/CriarLojaView.vue';
+import CentralConversasModal from './components/CentralConversasModal.vue';
 
 const paginaAtual = ref('home');
 const listaProjetos = ref([]);
 const listaIdeias = ref([]);
 const usuarioLogado = ref(null);
 const menuMobileAberto = ref(false);
+const modalConversasAberto = ref(false);
+const projetoSelecionadoParaChat = ref(null);
+
+const abrirCentralConversas = (projeto = null) => {
+  if (!usuarioLogado.value) {
+    alert("Por favor, faça login para acessar a Central de Mensagens.");
+    paginaAtual.value = 'login';
+    return;
+  }
+  projetoSelecionadoParaChat.value = projeto;
+  modalConversasAberto.value = true;
+};
 
 const carregarDados = async () => {
   try {
@@ -163,6 +176,19 @@ onMounted(() => {
         <!-- Ações do usuário -->
         <div class="cx-nav-actions">
           <template v-if="usuarioLogado">
+            <!-- Botão / Ícone de Mensagens -->
+            <button 
+              class="cx-btn-messages" 
+              @click="abrirCentralConversas()" 
+              title="Central de Mensagens" 
+              aria-label="Central de Mensagens"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span class="cx-btn-messages__label">Mensagens</span>
+            </button>
+
             <div class="cx-user">
               <div class="cx-user__avatar" :title="usuarioLogado.nome">
                 {{ usuarioLogado.nome.charAt(0).toUpperCase() }}
@@ -196,6 +222,7 @@ onMounted(() => {
         <button class="cx-nav-mobile__link" @click="navegar('ideias')">Ideias</button>
         <button class="cx-nav-mobile__link cx-nav-mobile__link--primary" @click="navegar('criar-loja')">Criar Loja</button>
         <button v-if="usuarioLogado?.nivel === 'admin'" class="cx-nav-mobile__link" @click="navegar('admin')">Admin</button>
+        <button v-if="usuarioLogado" class="cx-nav-mobile__link cx-nav-mobile__link--messages" @click="abrirCentralConversas(); menuMobileAberto = false;">💬 Mensagens</button>
         <div class="cx-nav-mobile__divider"></div>
         <template v-if="usuarioLogado">
           <button class="cx-nav-mobile__link cx-nav-mobile__link--danger" @click="deslogar">Sair da conta</button>
@@ -228,6 +255,7 @@ onMounted(() => {
         :user="usuarioLogado"
         @salvar="adicionarProjeto"
         @excluir="id => deletarItem('projeto', id)"
+        @abrir-chat="p => abrirCentralConversas(p)"
       />
       <Ideias
         v-if="paginaAtual === 'ideias'"
@@ -242,6 +270,14 @@ onMounted(() => {
       />
       <AdminPainel v-if="paginaAtual === 'admin'" @dados-atualizados="carregarDados" />
     </main>
+
+    <!-- Modal Central de Mensagens -->
+    <CentralConversasModal
+      v-if="modalConversasAberto"
+      :usuario="usuarioLogado"
+      :projetoInicial="projetoSelecionadoParaChat"
+      @fechar="modalConversasAberto = false"
+    />
 
   </div>
 </template>
@@ -545,5 +581,42 @@ onMounted(() => {
   .cx-main {
     padding-top: var(--cx-navbar-h);
   }
+}
+
+/* ─── Botão de Mensagens Navbar ─────────────────────────────────────────────── */
+.cx-btn-messages {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 4px;
+}
+
+.cx-btn-messages:hover {
+  background: #10b981;
+  color: #ffffff;
+  border-color: #10b981;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.cx-btn-messages svg {
+  transition: transform 0.2s ease;
+}
+
+.cx-btn-messages:hover svg {
+  transform: scale(1.1);
+}
+
+.cx-nav-mobile__link--messages {
+  color: #10b981;
+  font-weight: 600;
 }
 </style>
