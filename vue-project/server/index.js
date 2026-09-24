@@ -141,7 +141,7 @@ const configurarCors = () => {
 };
 
 const app = express();
-// Aumentado para 50mb para suportar imagens em Base64 grandes sem truncar
+// Limite de payload ampliado para 50mb para suportar imagens em Base64
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(configurarCors());
@@ -213,6 +213,9 @@ const inicializarBanco = async () => {
         status VARCHAR(20) DEFAULT 'pendente'
       )
     `);
+
+    // Garante automaticamente que a coluna imagem_url seja LONGTEXT
+    await pool.query(`ALTER TABLE projetos MODIFY COLUMN imagem_url LONGTEXT`);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ideias (
@@ -332,8 +335,8 @@ app.post("/projetos", async (req, res) => {
 
     res.json({ message: "Projeto enviado para análise com sucesso!" });
   } catch (err) {
-    console.error("Erro ao cadastrar projeto:", err);
-    res.status(500).json({ error: "Erro interno do servidor ao cadastrar projeto" });
+    console.error("Erro detalhado ao cadastrar projeto:", err.message);
+    res.status(500).json({ error: "Erro interno ao cadastrar projeto", details: err.message });
   }
 });
 
