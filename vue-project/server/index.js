@@ -20,12 +20,13 @@ const pool = mysql.createPool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Função de inicialização para garantir que a coluna da imagem suporte LONGTEXT
+// Função de inicialização: ajusta coluna LONGTEXT e atualiza projetos antigos para 'aprovado'
 async function inicializarBanco() {
   try {
     const connection = await pool.getConnection();
     await connection.query("ALTER TABLE projetos MODIFY COLUMN imagem_url LONGTEXT;");
-    console.log("✅ Tabela 'projetos' verificada: coluna 'imagem_url' ajustada para LONGTEXT com sucesso.");
+    await connection.query("UPDATE projetos SET status = 'aprovado' WHERE status IS NULL OR status = '' OR status = 'pendente';");
+    console.log("✅ Banco verificado: coluna ajustada e projetos antigos atualizados para 'aprovado'.");
     connection.release();
   } catch (err) {
     console.error("⚠️ Aviso na inicialização da tabela:", err.message);
