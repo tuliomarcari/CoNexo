@@ -322,7 +322,27 @@ const entrar = async () => {
   }
 
   .auth-form-area {
-    padding: var(--cx-space-8) var(--cx-space-5);
+    padding: var(--cx-space-8) var(--cx-space-4);
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .auth-form-wrap {
+    background: var(--cx-surface);
+    border: 1px solid var(--cx-border);
+    border-radius: var(--cx-radius-xl);
+    padding: var(--cx-space-8) var(--cx-space-6);
+    box-shadow: var(--cx-shadow-md);
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-form-area {
+    padding: var(--cx-space-6) var(--cx-space-4);
+  }
+
+  .auth-form-wrap {
+    padding: var(--cx-space-6) var(--cx-space-4);
   }
 }
 </style>

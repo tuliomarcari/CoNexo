@@ -476,12 +476,29 @@ const votar = async (item, tipo) => {
 
 /* Responsivo */
 @media (max-width: 900px) {
-  .page-layout { flex-direction: column; }
-  .page-form-col { flex: none; width: 100%; position: static; }
+  .page-layout {
+    flex-direction: column;
+    gap: var(--cx-space-8);
+  }
+  .page-form-col {
+    flex: none;
+    width: 100%;
+    position: static;
+  }
 }
 
 @media (max-width: 640px) {
-  .page-inner { padding: var(--cx-space-6) var(--cx-space-5); }
-  .ideias-list { grid-template-columns: 1fr; }
+  .page-inner {
+    padding: var(--cx-space-6) var(--cx-space-4);
+  }
+  .cx-card {
+    padding: var(--cx-space-6) var(--cx-space-4);
+  }
+  .ideia-card {
+    padding: var(--cx-space-5) var(--cx-space-4);
+  }
+  .ideias-list {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
