@@ -38,10 +38,22 @@
                 <input id="proj-nicho" v-model="novo.nicho" type="text" placeholder="Ex: Saúde, Tecnologia, Varejo" required />
               </div>
 
-              <!-- NOVO CAMPO: IMAGEM / LOGÓTIPO -->
+              <!-- SELETOR DE IMAGEM VIA DOCUMENTOS / FICHEIROS DO COMPUTADOR -->
               <div class="cx-field">
-                <label for="proj-imagem">Imagem / Logótipo (URL)</label>
-                <input id="proj-imagem" v-model="novo.imagem_url" type="url" placeholder="https://exemplo.com/foto-do-local.jpg" />
+                <label for="proj-file">Foto / Logótipo do Local (Anexo)</label>
+                <input 
+                  id="proj-file" 
+                  type="file" 
+                  accept="image/*" 
+                  @change="selecionarImagemDocumento" 
+                  class="cx-file-input" 
+                />
+                
+                <!-- Pré-visualização da imagem anexada -->
+                <div v-if="novo.imagem_url" class="cx-img-preview">
+                  <img :src="novo.imagem_url" alt="Foto do local anexada" />
+                  <button type="button" @click="removerImagemAnexada" class="cx-btn-remove-img">✕ Remover Imagem</button>
+                </div>
               </div>
 
               <div class="cx-field">
@@ -94,7 +106,7 @@
           <div class="project-list">
             <article class="project-item" v-for="p in projetos" :key="p.id">
               
-              <!-- EXIBIÇÃO DA IMAGEM ANEXADA -->
+              <!-- FOTO ANEXADA EXIBIDA NO TOPO DO CARTÃO -->
               <div v-if="p.imagem_url" class="project-item__img-container">
                 <img :src="p.imagem_url" :alt="p.empresa" class="project-item__img" />
               </div>
@@ -157,6 +169,31 @@ const novo = ref({
   telefone: ''
 });
 
+// Processa o arquivo anexado pelos documentos/computador
+const selecionarImagemDocumento = (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  // Validação de tamanho do arquivo (máx. 2MB)
+  if (file.size > 2 * 1024 * 1024) {
+    alert("O ficheiro é demasiado grande. Por favor escolha uma imagem menor que 2MB.");
+    event.target.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    novo.value.imagem_url = e.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+const removerImagemAnexada = () => {
+  novo.value.imagem_url = '';
+  const fileInput = document.getElementById('proj-file');
+  if (fileInput) fileInput.value = '';
+};
+
 const enviarProjeto = () => {
   const projetoFinal = {
     ...novo.value,
@@ -165,6 +202,7 @@ const enviarProjeto = () => {
   };
   emit('salvar', projetoFinal);
   Object.keys(novo.value).forEach(key => novo.value[key] = '');
+  removerImagemAnexada();
   alert("Projeto enviado com sucesso! Ele aparecerá na lista assim que o administrador aprová-lo.");
 };
 
@@ -291,18 +329,36 @@ const abrirContato = (projeto) => {
   box-sizing: border-box;
 }
 
-.cx-field input::placeholder,
-.cx-field textarea::placeholder {
-  color: var(--cx-text-faint);
+.cx-file-input {
+  padding: 8px !important;
+  font-size: var(--cx-text-xs) !important;
+  cursor: pointer;
 }
 
-.cx-field input:focus,
-.cx-field textarea:focus,
-.cx-field select:focus {
-  outline: none;
-  border-color: var(--cx-primary);
-  box-shadow: 0 0 0 3px var(--cx-primary-alpha);
-  background: var(--cx-surface);
+.cx-img-preview {
+  margin-top: 8px;
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--cx-border);
+}
+
+.cx-img-preview img {
+  width: 100%;
+  height: 130px;
+  object-fit: cover;
+  display: block;
+}
+
+.cx-btn-remove-img {
+  width: 100%;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: none;
+  padding: 6px;
+  font-size: var(--cx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .cx-field textarea {
@@ -395,18 +451,18 @@ const abrirContato = (projeto) => {
   border-color: rgba(13,156,110,0.15);
 }
 
-/* ESTILO DA IMAGEM DO PROJETO */
+/* ESTILO DA FOTO EXIBIDA NO ANÚNCIO */
 .project-item__img-container {
   width: calc(100% + var(--cx-space-12));
   margin: calc(-1 * var(--cx-space-6)) calc(-1 * var(--cx-space-6)) var(--cx-space-4) calc(-1 * var(--cx-space-6));
-  max-height: 200px;
+  max-height: 220px;
   overflow: hidden;
   background: var(--cx-bg-alt);
 }
 
 .project-item__img {
   width: 100%;
-  height: 200px;
+  height: 220px;
   object-fit: cover;
   display: block;
 }
@@ -527,7 +583,6 @@ const abrirContato = (projeto) => {
   color: #b91c1c;
 }
 
-/* Empty state */
 .cx-empty {
   display: flex;
   flex-direction: column;
@@ -546,7 +601,6 @@ const abrirContato = (projeto) => {
   color: var(--cx-text-muted);
 }
 
-/* Responsivo */
 @media (max-width: 900px) {
   .page-layout { flex-direction: column; }
   .page-form-col { flex: none; width: 100%; position: static; }
