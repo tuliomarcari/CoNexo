@@ -196,7 +196,29 @@ const carregarConversas = async () => {
   try {
     const token = localStorage.getItem('token');
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await axios.get(`${API_URL}/minhas-conversas/${props.usuario?.id || 0}`, { headers });
+    
+    let res;
+    try {
+      res = await axios.get(`${API_URL}/minhas-conversas`, { headers });
+    } catch {
+      try {
+        res = await axios.get(`${API_URL}/conversas`, { headers });
+      } catch {
+        res = await axios.get(`${API_URL}/projetos`);
+        if (res.data && Array.isArray(res.data)) {
+          res.data = res.data.map(p => ({
+            projeto_id: p.id,
+            empresa: p.empresa,
+            nicho: p.nicho,
+            valor: p.valor,
+            porcentagem: p.porcentagem,
+            ultima_msg: 'Clique para negociar',
+            autor_nome: 'Sistema',
+            ultima_data: new Date().toISOString()
+          }));
+        }
+      }
+    }
     
     if (res.data && Array.isArray(res.data)) {
       conversas.value = res.data;
@@ -222,7 +244,7 @@ const carregarConversas = async () => {
           selecionarConversa(novaConversa);
         }
       } else if (conversas.value.length > 0 && !conversaSelecionada.value) {
-        // Seleciona a primeira por padrão no desktop
+        // Seleciona a primeira conversa por padrão no desktop
         if (window.innerWidth > 768) {
           selecionarConversa(conversas.value[0]);
         }

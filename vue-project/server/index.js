@@ -640,29 +640,9 @@ const minhasConversasHandler = async (req, res) => {
         ) AS ultima_data,
         (SELECT COUNT(*) FROM mensagens m WHERE m.projeto_id = p.id) AS total_mensagens
       FROM projetos p
-      WHERE EXISTS (SELECT 1 FROM mensagens m WHERE m.projeto_id = p.id)
-         OR p.usuario_id = ?
-      ORDER BY ultima_data DESC
-    `, [userId]);
-
-    if (conversas.length === 0) {
-      const [todosProjetos] = await pool.query(`
-        SELECT 
-          p.id AS projeto_id,
-          p.empresa,
-          p.nicho,
-          p.valor,
-          p.porcentagem,
-          'Sem mensagens ainda' AS ultima_msg,
-          'Sistema' AS autor_nome,
-          CURRENT_TIMESTAMP AS ultima_data,
-          0 AS total_mensagens
-        FROM projetos p
-        WHERE p.status = 'aprovado'
-        LIMIT 10
-      `);
-      return res.json(todosProjetos);
-    }
+      WHERE p.status = 'aprovado' OR EXISTS (SELECT 1 FROM mensagens m WHERE m.projeto_id = p.id)
+      ORDER BY total_mensagens DESC, ultima_data DESC
+    `);
 
     res.json(conversas);
   } catch (err) {
@@ -682,14 +662,16 @@ const minhasConversasHandler = async (req, res) => {
       `);
       res.json(fallback);
     } catch (e2) {
-      res.status(500).json({ error: "Erro ao carregar conversas" });
+      res.status(500).json({ error: "Erro ao carregar conversas", details: err.message });
     }
   }
 };
 
-app.get("/minhas-conversas/:usuario_id?", autenticarToken, minhasConversasHandler);
+app.get("/minhas-conversas", autenticarToken, minhasConversasHandler);
+app.get("/minhas-conversas/:usuario_id", autenticarToken, minhasConversasHandler);
+app.get("/conversas", autenticarToken, minhasConversasHandler);
 app.get("/conversas/usuario", autenticarToken, minhasConversasHandler);
-app.get("/mensagens/usuario", autenticarToken, minhasConversasHandler);
+app.get("/mensagens/conversas", autenticarToken, minhasConversasHandler);
 
 // CRIAR LOJA BUILDER
 app.post("/lojas", async (req, res) => {
