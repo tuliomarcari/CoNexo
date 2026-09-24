@@ -183,6 +183,7 @@ const inicializarBanco = async () => {
         usuario_id INT, 
         email_contato VARCHAR(255), 
         telefone VARCHAR(20), 
+        imagem_url TEXT,
         status VARCHAR(20) DEFAULT 'pendente'
       )
     `);
@@ -218,6 +219,11 @@ const inicializarBanco = async () => {
     try {
       await pool.query("ALTER TABLE projetos ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'");
       console.log("🆕 Coluna status adicionada em projetos!");
+    } catch (e) { }
+
+    try {
+      await pool.query("ALTER TABLE projetos ADD COLUMN imagem_url TEXT");
+      console.log("🆕 Coluna imagem_url adicionada em projetos!");
     } catch (e) { }
 
     try {
@@ -280,12 +286,25 @@ app.post("/cadastro", async (req, res) => {
 });
 
 app.post("/projetos", async (req, res) => {
-  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, email, telefone, status } = req.body;
+  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, email, telefone, imagem_url, status } = req.body;
   try {
     await pool.query(
-      `INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato || email, telefone, status || 'pendente']
+      `INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, imagem_url, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        empresa,
+        estado,
+        cidade,
+        nicho,
+        descricao,
+        valor,
+        porcentagem,
+        usuario_id,
+        email_contato || email,
+        telefone,
+        imagem_url || null,
+        status || 'pendente'
+      ]
     );
 
     const destinatario = email_contato || email;

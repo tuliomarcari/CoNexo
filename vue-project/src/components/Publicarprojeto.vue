@@ -38,6 +38,12 @@
                 <input id="proj-nicho" v-model="novo.nicho" type="text" placeholder="Ex: Saúde, Tecnologia, Varejo" required />
               </div>
 
+              <!-- NOVO CAMPO: IMAGEM / LOGÓTIPO -->
+              <div class="cx-field">
+                <label for="proj-imagem">Imagem / Logótipo (URL)</label>
+                <input id="proj-imagem" v-model="novo.imagem_url" type="url" placeholder="https://exemplo.com/foto-do-local.jpg" />
+              </div>
+
               <div class="cx-field">
                 <label for="proj-desc">Descrição do projeto</label>
                 <textarea id="proj-desc" v-model="novo.descricao" placeholder="Descreva o que sua empresa faz e qual a oportunidade de investimento..." required rows="4"></textarea>
@@ -87,6 +93,12 @@
 
           <div class="project-list">
             <article class="project-item" v-for="p in projetos" :key="p.id">
+              
+              <!-- EXIBIÇÃO DA IMAGEM ANEXADA -->
+              <div v-if="p.imagem_url" class="project-item__img-container">
+                <img :src="p.imagem_url" :alt="p.empresa" class="project-item__img" />
+              </div>
+
               <header class="project-item__head">
                 <span class="project-item__badge">{{ p.nicho }}</span>
                 <span class="project-item__loc">{{ p.cidade }}, {{ p.estado }}</span>
@@ -137,6 +149,7 @@ const novo = ref({
   estado: '',
   cidade: '',
   nicho: '',
+  imagem_url: '',
   descricao: '',
   valor: '',
   porcentagem: '',
@@ -374,11 +387,28 @@ const abrirContato = (projeto) => {
   border-radius: var(--cx-radius-xl);
   padding: var(--cx-space-6);
   transition: box-shadow var(--cx-transition-base), border-color var(--cx-transition-base);
+  overflow: hidden;
 }
 
 .project-item:hover {
   box-shadow: var(--cx-shadow-md);
   border-color: rgba(13,156,110,0.15);
+}
+
+/* ESTILO DA IMAGEM DO PROJETO */
+.project-item__img-container {
+  width: calc(100% + var(--cx-space-12));
+  margin: calc(-1 * var(--cx-space-6)) calc(-1 * var(--cx-space-6)) var(--cx-space-4) calc(-1 * var(--cx-space-6));
+  max-height: 200px;
+  overflow: hidden;
+  background: var(--cx-bg-alt);
+}
+
+.project-item__img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  display: block;
 }
 
 .project-item__head {
