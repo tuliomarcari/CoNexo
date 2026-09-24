@@ -25,17 +25,34 @@
               <div class="cx-field-row">
                 <div class="cx-field">
                   <label for="proj-uf">UF</label>
-                  <input id="proj-uf" v-model="novo.estado" type="text" placeholder="SP" maxlength="2" required />
+                  <select id="proj-uf" v-model="novo.estado" @change="carregarCidadesPorUF" required>
+                    <option value="" disabled selected>UF</option>
+                    <option v-for="uf in estadosBR" :key="uf.sigla" :value="uf.sigla">
+                      {{ uf.sigla }}
+                    </option>
+                  </select>
                 </div>
                 <div class="cx-field cx-field--grow">
                   <label for="proj-cidade">Cidade</label>
-                  <input id="proj-cidade" v-model="novo.cidade" type="text" placeholder="São Paulo" required />
+                  <select id="proj-cidade" v-model="novo.cidade" :disabled="!novo.estado || carregandoCidades" required>
+                    <option value="" disabled selected>
+                      {{ carregandoCidades ? 'Carregando cidades...' : (!novo.estado ? 'Selecione o estado primeiro' : 'Selecione a cidade') }}
+                    </option>
+                    <option v-for="cid in cidades" :key="cid" :value="cid">
+                      {{ cid }}
+                    </option>
+                  </select>
                 </div>
               </div>
 
               <div class="cx-field">
                 <label for="proj-nicho">Nicho de atuação</label>
-                <input id="proj-nicho" v-model="novo.nicho" type="text" placeholder="Ex: Saúde, Tecnologia, Varejo" required />
+                <select id="proj-nicho" v-model="novo.nicho" required>
+                  <option value="" disabled selected>Selecione o nicho</option>
+                  <option v-for="nicho in nichosMercado" :key="nicho" :value="nicho">
+                    {{ nicho }}
+                  </option>
+                </select>
               </div>
 
               <!-- SELETOR DE IMAGEM OTIMIZADO -->
@@ -209,6 +226,72 @@ const novo = ref({
   telefone: ''
 });
 
+const estadosBR = [
+  { sigla: 'AC', nome: 'Acre' },
+  { sigla: 'AL', nome: 'Alagoas' },
+  { sigla: 'AP', nome: 'Amapá' },
+  { sigla: 'AM', nome: 'Amazonas' },
+  { sigla: 'BA', nome: 'Bahia' },
+  { sigla: 'CE', nome: 'Ceará' },
+  { sigla: 'DF', nome: 'Distrito Federal' },
+  { sigla: 'ES', nome: 'Espírito Santo' },
+  { sigla: 'GO', nome: 'Goiás' },
+  { sigla: 'MA', nome: 'Maranhão' },
+  { sigla: 'MT', nome: 'Mato Grosso' },
+  { sigla: 'MS', nome: 'Mato Grosso do Sul' },
+  { sigla: 'MG', nome: 'Minas Gerais' },
+  { sigla: 'PA', nome: 'Pará' },
+  { sigla: 'PB', nome: 'Paraíba' },
+  { sigla: 'PR', nome: 'Paraná' },
+  { sigla: 'PE', nome: 'Pernambuco' },
+  { sigla: 'PI', nome: 'Piauí' },
+  { sigla: 'RJ', nome: 'Rio de Janeiro' },
+  { sigla: 'RN', nome: 'Rio Grande do Norte' },
+  { sigla: 'RS', nome: 'Rio Grande do Sul' },
+  { sigla: 'RO', nome: 'Rondônia' },
+  { sigla: 'RR', nome: 'Roraima' },
+  { sigla: 'SC', nome: 'Santa Catarina' },
+  { sigla: 'SP', nome: 'São Paulo' },
+  { sigla: 'SE', nome: 'Sergipe' },
+  { sigla: 'TO', nome: 'Tocantins' }
+];
+
+const nichosMercado = [
+  'Tecnologia',
+  'Saúde',
+  'Varejo',
+  'Agronegócio',
+  'Educação',
+  'Indústria',
+  'Finanças',
+  'Logística',
+  'Alimentação',
+  'Serviços',
+  'Outros'
+];
+
+const cidades = ref([]);
+const carregandoCidades = ref(false);
+
+const carregarCidadesPorUF = async () => {
+  novo.value.cidade = '';
+  cidades.value = [];
+
+  if (!novo.value.estado) return;
+
+  carregandoCidades.value = true;
+  try {
+    const res = await axios.get(
+      `https://servicodados.ibge.gov.br/api/v1/localidades/estados/${novo.value.estado}/municipios?orderBy=nome`
+    );
+    cidades.value = res.data.map(c => c.nome);
+  } catch (err) {
+    console.error("Erro ao carregar cidades da API do IBGE:", err);
+  } finally {
+    carregandoCidades.value = false;
+  }
+};
+
 // Estados do Chat
 const chatAtivo = ref(false);
 const projetoSelecionado = ref(null);
@@ -275,6 +358,7 @@ const enviarProjeto = () => {
   };
   emit('salvar', projetoFinal);
   Object.keys(novo.value).forEach(key => novo.value[key] = '');
+  cidades.value = [];
   removerImagemAnexada();
   alert("Projeto enviado com sucesso! Ele aparecerá na lista assim que o administrador aprová-lo.");
 };
