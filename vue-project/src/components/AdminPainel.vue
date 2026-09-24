@@ -103,7 +103,7 @@
         <div class="admin-grid" v-else>
           <article class="admin-card" v-for="item in listaAtual" :key="item.id">
             
-            <!-- EXIBIÇÃO DA IMAGEM DO PROJETO PARA O ADMIN -->
+            <!-- Imagem do projeto (se existir) -->
             <div v-if="item.imagem_url" class="admin-card__img-container">
               <img :src="item.imagem_url" :alt="item.empresa || item.titulo" class="admin-card__img" />
             </div>
@@ -562,10 +562,10 @@ onMounted(carregarDadosAdmin);
   box-shadow: var(--cx-shadow-md);
 }
 
-/* Estilos da imagem do card administrativo */
+/* Estilos ajustados para a imagem do card administrativo */
 .admin-card__img-container {
-  width: calc(100% + var(--cx-space-12));
-  margin: calc(-1 * var(--cx-space-6)) calc(-1 * var(--cx-space-6)) 0 calc(-1 * var(--cx-space-6));
+  width: calc(100% + 48px);
+  margin: -24px -24px 16px -24px;
   max-height: 180px;
   overflow: hidden;
   background: var(--cx-bg-alt);
