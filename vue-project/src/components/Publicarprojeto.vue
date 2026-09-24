@@ -460,7 +460,7 @@ const enviarProjeto = () => {
 const abrirChat = async (projeto) => {
   const token = localStorage.getItem('token');
   if (!token) {
-    alert("Você estar conectado para conversar com o autor do projeto.");
+    alert("Você precisa estar conectado para conversar com o autor do projeto.");
     return;
   }
 
@@ -472,13 +472,12 @@ const abrirChat = async (projeto) => {
 const carregarMensagens = async (projetoId) => {
   const token = localStorage.getItem('token');
   try {
-    const res = await axios.get(`${API_URL}/mensagens/${projetoId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await axios.get(`${API_URL}/mensagens/${projetoId}`, { headers });
     mensagens.value = res.data;
     scrollToBottom();
   } catch (err) {
-    console.error("Erro ao carregar mensagens:", err);
+    console.error("Erro detalhado ao carregar mensagens:", err.response?.data || err.message);
   }
 };
 
@@ -486,22 +485,30 @@ const enviarMensagem = async () => {
   if (!novaMensagem.value.trim() || !projetoSelecionado.value) return;
 
   const token = localStorage.getItem('token');
+  if (!token) {
+    alert("Sua sessão expirou. Faça login novamente para enviar mensagens.");
+    return;
+  }
+
   try {
+    const payload = {
+      projeto_id: parseInt(projetoSelecionado.value.id, 10),
+      destinatario_id: projetoSelecionado.value.usuario_id ? parseInt(projetoSelecionado.value.usuario_id, 10) : 1,
+      mensagem: novaMensagem.value.trim()
+    };
+
     await axios.post(
       `${API_URL}/mensagens`,
-      {
-        projeto_id: projetoSelecionado.value.id,
-        destinatario_id: projetoSelecionado.value.usuario_id || 1,
-        mensagem: novaMensagem.value
-      },
+      payload,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
     novaMensagem.value = '';
     await carregarMensagens(projetoSelecionado.value.id);
   } catch (err) {
-    console.error("Erro ao enviar mensagem:", err);
-    alert("Erro ao enviar mensagem. Tente novamente.");
+    const erroAPI = err.response?.data?.error || err.response?.data?.details || err.message;
+    console.error("Erro detalhado ao enviar mensagem:", erroAPI, err.response?.data);
+    alert(`Erro ao enviar mensagem: ${erroAPI}`);
   }
 };
 
