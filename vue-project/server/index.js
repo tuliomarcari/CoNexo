@@ -577,6 +577,9 @@ const buscarMensagensHandler = async (req, res) => {
         m.id,
         m.projeto_id,
         COALESCE(m.remetente, u.nome, 'Usuário') AS remetente_nome,
+        COALESCE(m.remetente, '') AS remetente,
+        COALESCE(m.remetente_id, m.usuario_id, 0) AS remetente_id,
+        COALESCE(m.usuario_id, 0) AS usuario_id,
         COALESCE(m.mensagem, m.conteudo, m.texto, '') AS mensagem,
         COALESCE(m.created_at, m.data_envio, CURRENT_TIMESTAMP) AS data_envio
       FROM mensagens m
@@ -594,6 +597,9 @@ const buscarMensagensHandler = async (req, res) => {
           id,
           projeto_id,
           COALESCE(remetente, 'Usuário') AS remetente_nome,
+          COALESCE(remetente, '') AS remetente,
+          0 AS remetente_id,
+          0 AS usuario_id,
           COALESCE(mensagem, conteudo, texto, '') AS mensagem,
           COALESCE(created_at, data_envio, CURRENT_TIMESTAMP) AS data_envio
         FROM mensagens 

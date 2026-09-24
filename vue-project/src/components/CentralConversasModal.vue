@@ -103,10 +103,10 @@
                   v-for="m in mensagens" 
                   :key="m.id"
                   class="cx-msg-row"
-                  :class="{ 'cx-msg-row--mine': m.remetente_nome === usuario?.nome || m.remetente === usuario?.nome }"
+                  :class="ehMensagemMinha(m) ? 'cx-msg-row--mine' : 'cx-msg-row--other'"
                 >
                   <div class="cx-msg-bubble">
-                    <span class="cx-msg-author">{{ m.remetente_nome || m.remetente || 'Usuário' }}</span>
+                    <span class="cx-msg-author">{{ ehMensagemMinha(m) ? 'Você' : (m.remetente_nome || m.remetente || 'Usuário') }}</span>
                     <p class="cx-msg-text">{{ m.mensagem }}</p>
                     <span class="cx-msg-time">{{ formatarHora(m.data_envio || m.created_at) }}</span>
                   </div>
@@ -189,6 +189,27 @@ const formatarHora = (dataStr) => {
   } catch {
     return '';
   }
+};
+
+const ehMensagemMinha = (m) => {
+  if (!m) return false;
+
+  // 1. Comparar IDs se disponíveis
+  if (props.usuario?.id) {
+    if (m.remetente_id && Number(m.remetente_id) === Number(props.usuario.id)) return true;
+    if (m.usuario_id && Number(m.usuario_id) === Number(props.usuario.id)) return true;
+  }
+
+  // 2. Comparar nomes
+  const meunome = (props.usuario?.nome || '').trim().toLowerCase();
+  const nomeRemetente = (m.remetente_nome || m.remetente || m.autor_nome || '').trim().toLowerCase();
+
+  if (meunome && nomeRemetente) {
+    if (meunome === nomeRemetente) return true;
+    if (meunome.split(' ')[0] === nomeRemetente.split(' ')[0]) return true;
+  }
+
+  return false;
 };
 
 const carregarConversas = async () => {
@@ -645,38 +666,56 @@ onUnmounted(() => {
 .cx-msg-row {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  width: 100%;
 }
 
 .cx-msg-row--mine {
   align-items: flex-end;
 }
 
-.cx-msg-bubble {
-  max-width: 72%;
-  padding: 12px 16px;
-  border-radius: 14px;
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  position: relative;
+.cx-msg-row--other {
+  align-items: flex-start;
 }
 
+.cx-msg-bubble {
+  max-width: 72%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  position: relative;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Mensagens Enviadas pelo Usuário Logado (Direita - Esmeralda/WhatsApp) */
 .cx-msg-row--mine .cx-msg-bubble {
-  background: linear-gradient(135deg, #059669, #047857);
-  color: white;
+  background: linear-gradient(135deg, #0d9c6e, #057a54);
+  color: #ffffff;
+  border-bottom-right-radius: 2px;
   border: none;
+}
+
+/* Mensagens Recebidas de Outros Usuários (Esquerda - Escuro) */
+.cx-msg-row--other .cx-msg-bubble {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom-left-radius: 2px;
 }
 
 .cx-msg-author {
   display: block;
   font-size: 0.72rem;
   font-weight: 700;
-  color: #94a3b8;
   margin-bottom: 4px;
 }
 
 .cx-msg-row--mine .cx-msg-author {
-  color: rgba(255, 255, 255, 0.8);
+  color: #a7f3d0;
+  text-align: right;
+}
+
+.cx-msg-row--other .cx-msg-author {
+  color: #60a5fa;
+  text-align: left;
 }
 
 .cx-msg-text {
@@ -684,17 +723,14 @@ onUnmounted(() => {
   line-height: 1.45;
   margin: 0 0 4px 0;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .cx-msg-time {
   display: block;
   font-size: 0.68rem;
-  color: #64748b;
+  opacity: 0.75;
   text-align: right;
-}
-
-.cx-msg-row--mine .cx-msg-time {
-  color: rgba(255, 255, 255, 0.6);
 }
 
 /* ─── INPUT BAR ─────────────────────────────────────────────────────────────── */

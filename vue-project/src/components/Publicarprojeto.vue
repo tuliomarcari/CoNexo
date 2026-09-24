@@ -231,11 +231,11 @@
             v-for="m in mensagens" 
             :key="m.id" 
             class="chat-bubble"
-            :class="{ 'chat-bubble--mine': m.remetente_id === user?.id }"
+            :class="{ 'chat-bubble--mine': ehMensagemMinha(m) }"
           >
-            <span class="bubble-autor">{{ m.remetente_nome }}</span>
+            <span class="bubble-autor">{{ ehMensagemMinha(m) ? 'Você' : (m.remetente_nome || m.remetente || 'Usuário') }}</span>
             <p>{{ m.mensagem }}</p>
-            <span class="bubble-time">{{ new Date(m.data_envio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span>
+            <span class="bubble-time">{{ new Date(m.data_envio || m.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span>
           </div>
         </div>
 
@@ -457,6 +457,26 @@ const enviarProjeto = () => {
 };
 
 // Funções de Chat
+const ehMensagemMinha = (m) => {
+  if (!m) return false;
+
+  const usuarioLogadoId = props.user?.id;
+  if (usuarioLogadoId) {
+    if (m.remetente_id && Number(m.remetente_id) === Number(usuarioLogadoId)) return true;
+    if (m.usuario_id && Number(m.usuario_id) === Number(usuarioLogadoId)) return true;
+  }
+
+  const meunome = (props.user?.nome || '').trim().toLowerCase();
+  const nomeRemetente = (m.remetente_nome || m.remetente || m.autor_nome || '').trim().toLowerCase();
+
+  if (meunome && nomeRemetente) {
+    if (meunome === nomeRemetente) return true;
+    if (meunome.split(' ')[0] === nomeRemetente.split(' ')[0]) return true;
+  }
+
+  return false;
+};
+
 const abrirChat = async (projeto) => {
   const token = localStorage.getItem('token');
   if (!token) {
