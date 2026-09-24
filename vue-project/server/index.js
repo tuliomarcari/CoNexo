@@ -198,19 +198,24 @@ async function inicializarBanco() {
           id INT AUTO_INCREMENT PRIMARY KEY,
           projeto_id INT NOT NULL,
           remetente VARCHAR(255),
-          mensagem TEXT,
-          conteudo TEXT,
+          mensagem TEXT NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+        );
       `);
-      try { await connection.query(`ALTER TABLE mensagens ADD COLUMN mensagem TEXT`); } catch (e) {}
-      try { await connection.query(`ALTER TABLE mensagens ADD COLUMN conteudo TEXT`); } catch (e) {}
-      try { await connection.query(`ALTER TABLE mensagens ADD COLUMN remetente VARCHAR(255)`); } catch (e) {}
-      try { await connection.query(`ALTER TABLE mensagens ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`); } catch (e) {}
-      try { await connection.query(`ALTER TABLE mensagens ADD COLUMN remetente_id INT DEFAULT 0`); } catch (e) {}
-      try { await connection.query(`ALTER TABLE mensagens ADD COLUMN destinatario_id INT DEFAULT 0`); } catch (e) {}
-      try { await connection.query(`ALTER TABLE mensagens ADD COLUMN usuario_id INT DEFAULT 0`); } catch (e) {}
-      try { await connection.query(`ALTER TABLE mensagens ADD COLUMN data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP`); } catch (e) {}
+
+      // Tenta adicionar a coluna caso a tabela já exista sem ela
+      try {
+        await connection.query("ALTER TABLE mensagens ADD COLUMN mensagem TEXT;");
+      } catch (e) {}
+      try {
+        await connection.query("ALTER TABLE mensagens ADD COLUMN conteudo TEXT;");
+      } catch (e) {}
+      try {
+        await connection.query("ALTER TABLE mensagens ADD COLUMN remetente VARCHAR(255);");
+      } catch (e) {}
+      try {
+        await connection.query("ALTER TABLE mensagens ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;");
+      } catch (e) {}
     } catch (e) {
       console.error("Aviso no ajuste da tabela mensagens:", e.message);
     }
@@ -599,41 +604,6 @@ const buscarMensagensHandler = async (req, res) => {
     } catch (err2) {
       console.error("❌ Erro ao carregar mensagens:", err2.message);
       res.status(500).json({ error: "Erro ao carregar mensagens", details: err2.message });
-    }
-  }
-};
-
-const buscarMensagensHandler = async (req, res) => {
-  const { projeto_id } = req.params;
-  const projId = parseInt(projeto_id, 10);
-
-  if (isNaN(projId)) {
-    return res.status(400).json({ error: "ID do projeto inválido." });
-  }
-
-  try {
-    const [mensagens] = await pool.query(`
-      SELECT 
-        m.*, 
-        COALESCE(m.remetente, u.nome, 'Usuário') AS remetente_nome 
-      FROM mensagens m
-      LEFT JOIN usuarios u ON (m.remetente_id = u.id OR m.usuario_id = u.id)
-      WHERE m.projeto_id = ?
-      ORDER BY m.id ASC
-    `, [projId]);
-
-    res.json(mensagens);
-  } catch (err) {
-    console.warn("⚠️ Busca completa de mensagens falhou, usando fallback simples:", err.message);
-    try {
-      const [mensagensSimples] = await pool.query(
-        "SELECT *, 'Usuário' as remetente_nome FROM mensagens WHERE projeto_id = ? ORDER BY id ASC",
-        [projId]
-      );
-      res.json(mensagensSimples);
-    } catch (err2) {
-      console.error("❌ Erro ao carregar mensagens:", err2.message);
-      res.status(500).json({ error: "Erro interno ao carregar mensagens", details: err2.message });
     }
   }
 };
