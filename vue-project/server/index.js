@@ -122,121 +122,129 @@ const autenticarToken = (req, res, next) => {
   }
 };
 
-// Inicialização do Banco de Dados: cria tabelas, altera LONGTEXT e atualiza registros antigos
+// Inicialização do Banco de Dados: cria tabelas com tratamento individual por bloco
 async function inicializarBanco() {
+  let connection;
   try {
-    const connection = await pool.getConnection();
+    connection = await pool.getConnection();
 
     // Tabela Usuarios
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS usuarios (
-        id INT AUTO_INCREMENT PRIMARY KEY, 
-        nome VARCHAR(255), 
-        email VARCHAR(255) UNIQUE, 
-        senha VARCHAR(255), 
-        nivel VARCHAR(50) DEFAULT 'cliente'
-      )
-    `);
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS usuarios (
+          id INT AUTO_INCREMENT PRIMARY KEY, 
+          nome VARCHAR(255), 
+          email VARCHAR(255) UNIQUE, 
+          senha VARCHAR(255), 
+          nivel VARCHAR(50) DEFAULT 'cliente'
+        )
+      `);
+    } catch (e) { console.error("Aviso tabela usuarios:", e.message); }
 
     // Tabela Projetos
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS projetos (
-        id INT AUTO_INCREMENT PRIMARY KEY, 
-        empresa VARCHAR(255), 
-        estado VARCHAR(10), 
-        cidade VARCHAR(255), 
-        nicho VARCHAR(255), 
-        descricao TEXT, 
-        valor DECIMAL(15,2), 
-        porcentagem INT, 
-        usuario_id INT, 
-        email_contato VARCHAR(255), 
-        telefone VARCHAR(20), 
-        imagem_url LONGTEXT,
-        status VARCHAR(20) DEFAULT 'pendente'
-      )
-    `);
-
-    // Ajustar imagem_url para LONGTEXT
     try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS projetos (
+          id INT AUTO_INCREMENT PRIMARY KEY, 
+          empresa VARCHAR(255), 
+          estado VARCHAR(10), 
+          cidade VARCHAR(255), 
+          nicho VARCHAR(255), 
+          descricao TEXT, 
+          valor DECIMAL(15,2), 
+          porcentagem INT, 
+          usuario_id INT, 
+          email_contato VARCHAR(255), 
+          telefone VARCHAR(20), 
+          imagem_url LONGTEXT,
+          status VARCHAR(20) DEFAULT 'pendente'
+        )
+      `);
       await connection.query(`ALTER TABLE projetos MODIFY COLUMN imagem_url LONGTEXT`);
     } catch (e) {}
 
     // Tabela Ideias
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS ideias (
-        id INT AUTO_INCREMENT PRIMARY KEY, 
-        titulo VARCHAR(255), 
-        nicho VARCHAR(100), 
-        descricao TEXT, 
-        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
-        status VARCHAR(20) DEFAULT 'pendente'
-      )
-    `);
-
-    // Adicionar coluna status em ideias caso a tabela já existisse
     try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS ideias (
+          id INT AUTO_INCREMENT PRIMARY KEY, 
+          titulo VARCHAR(255), 
+          nicho VARCHAR(100), 
+          descricao TEXT, 
+          data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+          status VARCHAR(20) DEFAULT 'pendente'
+        )
+      `);
       await connection.query(`ALTER TABLE ideias ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'`);
     } catch (e) {}
 
     // Tabela Votos Ideias
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS votos_ideias (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        usuario_id INT NOT NULL,
-        ideia_id INT NOT NULL,
-        tipo_voto VARCHAR(10) NOT NULL,
-        UNIQUE KEY uq_usuario_ideia (usuario_id, ideia_id)
-      )
-    `);
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS votos_ideias (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          usuario_id INT NOT NULL,
+          ideia_id INT NOT NULL,
+          tipo_voto VARCHAR(10) NOT NULL,
+          UNIQUE KEY uq_usuario_ideia (usuario_id, ideia_id)
+        )
+      `);
+    } catch (e) {}
 
-    // Tabela Mensagens / Chat
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS mensagens (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        projeto_id INT NOT NULL,
-        remetente_id INT DEFAULT 0,
-        destinatario_id INT DEFAULT 0,
-        usuario_id INT DEFAULT 0,
-        remetente VARCHAR(255) DEFAULT 'Usuário',
-        mensagem TEXT NOT NULL,
-        data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Ajustes preventivos de colunas na tabela mensagens para bases já existentes
-    try { await connection.query(`ALTER TABLE mensagens ADD COLUMN remetente_id INT DEFAULT 0`); } catch (e) {}
-    try { await connection.query(`ALTER TABLE mensagens ADD COLUMN destinatario_id INT DEFAULT 0`); } catch (e) {}
-    try { await connection.query(`ALTER TABLE mensagens ADD COLUMN usuario_id INT DEFAULT 0`); } catch (e) {}
-    try { await connection.query(`ALTER TABLE mensagens ADD COLUMN remetente VARCHAR(255) DEFAULT 'Usuário'`); } catch (e) {}
-    try { await connection.query(`ALTER TABLE mensagens ADD COLUMN data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP`); } catch (e) {}
-    try { await connection.query(`ALTER TABLE mensagens ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`); } catch (e) {}
+    // Tabela Mensagens / Chat (Garantida!)
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS mensagens (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          projeto_id INT NOT NULL,
+          remetente_id INT DEFAULT 0,
+          destinatario_id INT DEFAULT 0,
+          usuario_id INT DEFAULT 0,
+          remetente VARCHAR(255) DEFAULT 'Usuário',
+          mensagem TEXT NOT NULL,
+          data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await connection.query(`ALTER TABLE mensagens ADD COLUMN remetente_id INT DEFAULT 0`);
+      await connection.query(`ALTER TABLE mensagens ADD COLUMN destinatario_id INT DEFAULT 0`);
+      await connection.query(`ALTER TABLE mensagens ADD COLUMN usuario_id INT DEFAULT 0`);
+      await connection.query(`ALTER TABLE mensagens ADD COLUMN remetente VARCHAR(255) DEFAULT 'Usuário'`);
+      await connection.query(`ALTER TABLE mensagens ADD COLUMN data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
+      await connection.query(`ALTER TABLE mensagens ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
+    } catch (e) {
+      console.error("Aviso no ajuste da tabela mensagens:", e.message);
+    }
 
     // Tabela Lojas
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS lojas (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        nome_loja VARCHAR(255),
-        usuario_id INT,
-        banner_estilo VARCHAR(50),
-        vitrine_estilo VARCHAR(50),
-        rodape_estilo VARCHAR(50),
-        cor_primaria VARCHAR(20) DEFAULT '#10b981',
-        cor_secundaria VARCHAR(20) DEFAULT '#0f172a',
-        cor_terciaria VARCHAR(20) DEFAULT '#ffffff',
-        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS lojas (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          nome_loja VARCHAR(255),
+          usuario_id INT,
+          banner_estilo VARCHAR(50),
+          vitrine_estilo VARCHAR(50),
+          rodape_estilo VARCHAR(50),
+          cor_primaria VARCHAR(20) DEFAULT '#10b981',
+          cor_secundaria VARCHAR(20) DEFAULT '#0f172a',
+          cor_terciaria VARCHAR(20) DEFAULT '#ffffff',
+          data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+    } catch (e) {}
 
-    // Garantir visibilidade para cadastros onde o status era nulo ou vazio
-    await connection.query("UPDATE projetos SET status = 'aprovado' WHERE status IS NULL OR status = '';");
-    await connection.query("UPDATE ideias SET status = 'aprovado' WHERE status IS NULL OR status = '';");
+    // Atualizações legadas
+    try {
+      await connection.query("UPDATE projetos SET status = 'aprovado' WHERE status IS NULL OR status = '';");
+      await connection.query("UPDATE ideias SET status = 'aprovado' WHERE status IS NULL OR status = '';");
+    } catch (e) {}
 
-    console.log("✅ Banco de dados inicializado: tabelas verificadas e registros com status legado atualizados.");
-    connection.release();
+    console.log("✅ Banco de dados inicializado com sucesso.");
   } catch (err) {
-    console.error("⚠️ Aviso na inicialização do banco de dados:", err.message);
+    console.error("⚠️ Erro geral na conexão da inicialização do banco:", err.message);
+  } finally {
+    if (connection) connection.release();
   }
 }
 
@@ -498,32 +506,54 @@ const enviarMensagemHandler = async (req, res) => {
 
   console.log(`[Chat] Recebida mensagem para projeto #${projId}: "${textoMensagem.substring(0, 30)}"`);
 
+  // Garantia ativa de tabela mensagens no banco de dados
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS mensagens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        projeto_id INT NOT NULL,
+        remetente_id INT DEFAULT 0,
+        destinatario_id INT DEFAULT 0,
+        usuario_id INT DEFAULT 0,
+        remetente VARCHAR(255) DEFAULT 'Usuário',
+        mensagem TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  } catch (tErr) {
+    console.warn("⚠️ Aviso ao verificar tabela mensagens no handler:", tErr.message);
+  }
+
   try {
     await pool.query(
       "INSERT INTO mensagens (projeto_id, remetente_id, destinatario_id, usuario_id, remetente, mensagem) VALUES (?, ?, ?, ?, ?, ?)",
       [projId, remetId, destId, remetId, autorNome, textoMensagem]
     );
+    console.log(`✅ Mensagem salva com sucesso no projeto #${projId}`);
     return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
   } catch (err1) {
-    console.warn("⚠️ Tentativa 1 de envio falhou:", err1.message);
+    console.error("Erro detalhado (Tentativa 1):", err1);
 
     try {
       await pool.query(
-        "INSERT INTO mensagens (projeto_id, remetente_id, destinatario_id, mensagem) VALUES (?, ?, ?, ?)",
-        [projId, remetId, destId, textoMensagem]
+        "INSERT INTO mensagens (projeto_id, remetente, mensagem) VALUES (?, ?, ?)",
+        [projId, autorNome, textoMensagem]
       );
+      console.log(`✅ Mensagem salva com sucesso via fallback no projeto #${projId}`);
       return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
     } catch (err2) {
-      console.warn("⚠️ Tentativa 2 de envio falhou:", err2.message);
+      console.error("Erro detalhado (Tentativa 2):", err2);
 
       try {
         await pool.query(
           "INSERT INTO mensagens (projeto_id, mensagem) VALUES (?, ?)",
           [projId, textoMensagem]
         );
+        console.log(`✅ Mensagem salva com sucesso via fallback simples no projeto #${projId}`);
         return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
       } catch (err3) {
-        console.error("❌ Todas as tentativas de inserção no banco falharam:", err3.message);
+        console.error("Erro detalhado final (Tentativa 3):", err3);
         return res.status(500).json({
           error: "Erro ao salvar mensagem no banco de dados",
           details: err3.message
