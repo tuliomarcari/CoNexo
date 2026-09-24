@@ -102,6 +102,12 @@
 
         <div class="admin-grid" v-else>
           <article class="admin-card" v-for="item in listaAtual" :key="item.id">
+            
+            <!-- EXIBIÇÃO DA IMAGEM DO PROJETO PARA O ADMIN -->
+            <div v-if="item.imagem_url" class="admin-card__img-container">
+              <img :src="item.imagem_url" :alt="item.empresa || item.titulo" class="admin-card__img" />
+            </div>
+
             <header class="admin-card__head">
               <div class="admin-card__meta">
                 <span class="admin-card__tipo" :class="item.tipo_item === 'projeto' ? 'admin-card__tipo--projeto' : 'admin-card__tipo--ideia'">
@@ -554,6 +560,24 @@ onMounted(carregarDadosAdmin);
 
 .admin-card:hover {
   box-shadow: var(--cx-shadow-md);
+}
+
+/* Estilos da imagem do card administrativo */
+.admin-card__img-container {
+  width: calc(100% + var(--cx-space-12));
+  margin: calc(-1 * var(--cx-space-6)) calc(-1 * var(--cx-space-6)) 0 calc(-1 * var(--cx-space-6));
+  max-height: 180px;
+  overflow: hidden;
+  background: var(--cx-bg-alt);
+  border-top-left-radius: var(--cx-radius-xl);
+  border-top-right-radius: var(--cx-radius-xl);
+}
+
+.admin-card__img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
 }
 
 .admin-card__head {
