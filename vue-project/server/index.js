@@ -195,12 +195,19 @@ async function inicializarBanco() {
       CREATE TABLE IF NOT EXISTS mensagens (
         id INT AUTO_INCREMENT PRIMARY KEY,
         projeto_id INT NOT NULL,
-        remetente_id INT NOT NULL,
-        destinatario_id INT NOT NULL,
+        remetente_id INT NULL,
+        destinatario_id INT NULL,
         mensagem TEXT NOT NULL,
         data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Ajustes preventivos de colunas na tabela mensagens
+    try { await connection.query(`ALTER TABLE mensagens ADD COLUMN remetente_id INT NULL`); } catch (e) {}
+    try { await connection.query(`ALTER TABLE mensagens ADD COLUMN destinatario_id INT NULL`); } catch (e) {}
+    try { await connection.query(`ALTER TABLE mensagens ADD COLUMN data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP`); } catch (e) {}
+    try { await connection.query(`ALTER TABLE mensagens MODIFY COLUMN remetente_id INT NULL`); } catch (e) {}
+    try { await connection.query(`ALTER TABLE mensagens MODIFY COLUMN destinatario_id INT NULL`); } catch (e) {}
 
     // Tabela Lojas
     await connection.query(`
@@ -470,44 +477,55 @@ app.put("/ideias/:id/votar", autenticarToken, async (req, res) => {
 // CHAT / MENSAGENS
 app.post("/mensagens", autenticarToken, async (req, res) => {
   const { projeto_id, destinatario_id, mensagem } = req.body;
-  const remetente_id = req.usuario?.id || 1;
+  const remetente_id = req.usuario?.id || null;
 
   if (!projeto_id || !mensagem || !mensagem.trim()) {
     return res.status(400).json({ error: "Dados incompletos para envio de mensagem." });
   }
 
   const projId = parseInt(projeto_id, 10);
-  const destId = destinatario_id ? parseInt(destinatario_id, 10) : 1;
-  const remetId = parseInt(remetente_id, 10);
+  if (isNaN(projId)) {
+    return res.status(400).json({ error: "ID do projeto inválido." });
+  }
+
+  const destId = destinatario_id ? parseInt(destinatario_id, 10) : null;
+  const remetId = remetente_id ? parseInt(remetente_id, 10) : null;
+  const textoMensagem = mensagem.trim();
 
   try {
     await pool.query(
       "INSERT INTO mensagens (projeto_id, remetente_id, destinatario_id, mensagem) VALUES (?, ?, ?, ?)",
-      [projId, remetId, destId, mensagem.trim()]
+      [projId, remetId, destId, textoMensagem]
     );
-    res.status(201).json({ message: "Mensagem enviada com sucesso!" });
+    return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
   } catch (err) {
-    console.error("Erro ao enviar mensagem no backend:", err.message);
+    console.error("⚠️ Tentativa 1 de envio de mensagem falhou:", err.message);
 
     try {
-      const [users] = await pool.query("SELECT id FROM usuarios LIMIT 1");
-      const validUserId = users.length > 0 ? users[0].id : 1;
       await pool.query(
-        "INSERT INTO mensagens (projeto_id, remetente_id, destinatario_id, mensagem) VALUES (?, ?, ?, ?)",
-        [projId, validUserId, validUserId, mensagem.trim()]
+        "INSERT INTO mensagens (projeto_id, mensagem) VALUES (?, ?)",
+        [projId, textoMensagem]
       );
-      res.status(201).json({ message: "Mensagem enviada com sucesso!" });
-    } catch (fallbackErr) {
-      console.error("Erro fallback ao enviar mensagem:", fallbackErr.message);
-      res.status(500).json({ error: "Erro interno ao enviar mensagem", details: err.message });
+      return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
+    } catch (err2) {
+      console.error("❌ Erro ao enviar mensagem no backend:", err2.message);
+      return res.status(500).json({
+        error: "Erro interno ao enviar mensagem",
+        details: err2.message
+      });
     }
   }
 });
 
 app.get("/mensagens/:projeto_id", async (req, res) => {
   const { projeto_id } = req.params;
+  const projId = parseInt(projeto_id, 10);
+
+  if (isNaN(projId)) {
+    return res.status(400).json({ error: "ID do projeto inválido." });
+  }
+
   try {
-    const projId = parseInt(projeto_id, 10);
     const [mensagens] = await pool.query(`
       SELECT 
         m.*, 
@@ -515,13 +533,22 @@ app.get("/mensagens/:projeto_id", async (req, res) => {
       FROM mensagens m
       LEFT JOIN usuarios u ON m.remetente_id = u.id
       WHERE m.projeto_id = ?
-      ORDER BY m.data_envio ASC
+      ORDER BY m.id ASC
     `, [projId]);
 
     res.json(mensagens);
   } catch (err) {
-    console.error("Erro ao buscar mensagens:", err.message);
-    res.status(500).json({ error: "Erro interno ao buscar mensagens", details: err.message });
+    console.error("Erro ao buscar mensagens completas:", err.message);
+    try {
+      const [mensagensSimples] = await pool.query(
+        "SELECT *, 'Usuário' as remetente_nome FROM mensagens WHERE projeto_id = ? ORDER BY id ASC",
+        [projId]
+      );
+      res.json(mensagensSimples);
+    } catch (err2) {
+      console.error("❌ Erro ao carregar mensagens:", err2.message);
+      res.status(500).json({ error: "Erro interno ao carregar mensagens", details: err2.message });
+    }
   }
 });
 
