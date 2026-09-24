@@ -504,6 +504,7 @@ const enviarMensagemHandler = async (req, res) => {
     return res.status(400).json({ error: "ID do projeto inválido." });
   }
 
+  const idRemetente = req.usuario?.id || usuario_id || 0;
   const nomeRemetente = req.usuario?.nome || remetente || 'Usuário';
 
   console.log(`[Chat] Recebida mensagem para projeto #${projId}: "${textoMensagem.substring(0, 30)}"`);
@@ -524,11 +525,13 @@ const enviarMensagemHandler = async (req, res) => {
   try { await pool.query(`ALTER TABLE mensagens ADD COLUMN mensagem TEXT`); } catch (e) {}
   try { await pool.query(`ALTER TABLE mensagens ADD COLUMN conteudo TEXT`); } catch (e) {}
   try { await pool.query(`ALTER TABLE mensagens ADD COLUMN remetente VARCHAR(255)`); } catch (e) {}
+  try { await pool.query(`ALTER TABLE mensagens ADD COLUMN remetente_id INT DEFAULT 0`); } catch (e) {}
+  try { await pool.query(`ALTER TABLE mensagens ADD COLUMN usuario_id INT DEFAULT 0`); } catch (e) {}
 
   try {
     await pool.query(
-      "INSERT INTO mensagens (projeto_id, remetente, mensagem) VALUES (?, ?, ?)",
-      [projId, nomeRemetente, textoMensagem]
+      "INSERT INTO mensagens (projeto_id, remetente, mensagem, remetente_id, usuario_id) VALUES (?, ?, ?, ?, ?)",
+      [projId, nomeRemetente, textoMensagem, idRemetente, idRemetente]
     );
     console.log(`✅ Mensagem salva com sucesso no projeto #${projId}`);
     return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
@@ -537,20 +540,20 @@ const enviarMensagemHandler = async (req, res) => {
 
     try {
       await pool.query(
-        "INSERT INTO mensagens (projeto_id, remetente, conteudo) VALUES (?, ?, ?)",
+        "INSERT INTO mensagens (projeto_id, remetente, mensagem) VALUES (?, ?, ?)",
         [projId, nomeRemetente, textoMensagem]
       );
-      console.log(`✅ Mensagem salva via coluna 'conteudo' no projeto #${projId}`);
+      console.log(`✅ Mensagem salva via coluna simples no projeto #${projId}`);
       return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
     } catch (err2) {
       console.error("Erro detalhado (Tentativa 2):", err2.message);
 
       try {
         await pool.query(
-          "INSERT INTO mensagens (projeto_id, mensagem) VALUES (?, ?)",
+          "INSERT INTO mensagens (projeto_id, conteudo) VALUES (?, ?)",
           [projId, textoMensagem]
         );
-        console.log(`✅ Mensagem salva via fallback simples no projeto #${projId}`);
+        console.log(`✅ Mensagem salva via fallback 'conteudo' no projeto #${projId}`);
         return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
       } catch (err3) {
         console.error("Erro detalhado final ao salvar mensagem:", err3);
@@ -571,7 +574,42 @@ const buscarMensagensHandler = async (req, res) => {
     return res.status(400).json({ error: "ID do projeto inválido." });
   }
 
+  const userId = req.usuario?.id || 0;
+  const userNome = req.usuario?.nome ? req.usuario.nome.trim() : '';
+  const isAdmin = req.usuario?.nivel === 'admin';
+
   try {
+    // 1. Obter dono do projeto
+    const [donoRows] = await pool.query("SELECT usuario_id FROM projetos WHERE id = ?", [projId]);
+    const donoId = donoRows.length > 0 ? donoRows[0].usuario_id : null;
+
+    // 2. Verificar se o usuário logado participou da conversa no projeto
+    let participou = false;
+    if (userId || userNome) {
+      const [partRows] = await pool.query(`
+        SELECT id FROM mensagens 
+        WHERE projeto_id = ? 
+          AND (
+            (remetente_id = ? AND remetente_id > 0)
+            OR (usuario_id = ? AND usuario_id > 0)
+            OR (destinatario_id = ? AND destinatario_id > 0)
+            OR (LOWER(remetente) = LOWER(?) AND remetente IS NOT NULL AND remetente != '')
+          )
+        LIMIT 1
+      `, [projId, userId, userId, userId, userNome]);
+      
+      if (partRows.length > 0) {
+        participou = true;
+      }
+    }
+
+    const ehDono = userId && donoId && (Number(userId) === Number(donoId));
+
+    // Privacidade Rígida: se não for o autor do projeto, nem participante ativo, nem admin -> proíbe o acesso a conversas alheias
+    if (!ehDono && !participou && !isAdmin) {
+      return res.json([]);
+    }
+
     const [mensagens] = await pool.query(`
       SELECT 
         m.id,
@@ -590,85 +628,92 @@ const buscarMensagensHandler = async (req, res) => {
 
     res.json(mensagens);
   } catch (err) {
-    console.warn("⚠️ Busca completa de mensagens falhou, usando fallback simples:", err.message);
-    try {
-      const [mensagensSimples] = await pool.query(`
-        SELECT 
-          id,
-          projeto_id,
-          COALESCE(remetente, 'Usuário') AS remetente_nome,
-          COALESCE(remetente, '') AS remetente,
-          0 AS remetente_id,
-          0 AS usuario_id,
-          COALESCE(mensagem, conteudo, texto, '') AS mensagem,
-          COALESCE(created_at, data_envio, CURRENT_TIMESTAMP) AS data_envio
-        FROM mensagens 
-        WHERE projeto_id = ? 
-        ORDER BY id ASC
-      `, [projId]);
-      res.json(mensagensSimples);
-    } catch (err2) {
-      console.error("❌ Erro ao carregar mensagens:", err2.message);
-      res.status(500).json({ error: "Erro ao carregar mensagens", details: err2.message });
+    console.warn("⚠️ Busca completa de mensagens falhou:", err.message);
+    res.json([]);
+  }
+};
+
+const minhasConversasHandler = async (req, res) => {
+  const userId = parseInt(req.params.usuario_id, 10) || req.usuario?.id || 0;
+  const userNome = req.usuario?.nome ? req.usuario.nome.trim() : '';
+  const isAdmin = req.usuario?.nivel === 'admin';
+
+  // Se não autenticado nem admin -> sigilo total (retorna lista vazia)
+  if (!userId && !userNome && !isAdmin) {
+    return res.json([]);
+  }
+
+  try {
+    let sql, params;
+
+    if (isAdmin) {
+      sql = `
+        SELECT DISTINCT
+          p.id AS projeto_id,
+          p.empresa,
+          p.nicho,
+          p.valor,
+          p.porcentagem,
+          COALESCE(
+            (SELECT m.mensagem FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
+            (SELECT m.conteudo FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
+            ''
+          ) AS ultima_msg,
+          COALESCE(
+            (SELECT m.remetente FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
+            'Usuário'
+          ) AS autor_nome,
+          (SELECT MAX(m.created_at) FROM mensagens m WHERE m.projeto_id = p.id) AS ultima_data,
+          (SELECT COUNT(*) FROM mensagens m WHERE m.projeto_id = p.id) AS total_mensagens
+        FROM projetos p
+        INNER JOIN mensagens m ON m.projeto_id = p.id
+        ORDER BY ultima_data DESC
+      `;
+      params = [];
+    } else {
+      sql = `
+        SELECT DISTINCT
+          p.id AS projeto_id,
+          p.empresa,
+          p.nicho,
+          p.valor,
+          p.porcentagem,
+          COALESCE(
+            (SELECT m.mensagem FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
+            (SELECT m.conteudo FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
+            ''
+          ) AS ultima_msg,
+          COALESCE(
+            (SELECT m.remetente FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
+            'Usuário'
+          ) AS autor_nome,
+          (SELECT MAX(m.created_at) FROM mensagens m WHERE m.projeto_id = p.id) AS ultima_data,
+          (SELECT COUNT(*) FROM mensagens m WHERE m.projeto_id = p.id) AS total_mensagens
+        FROM projetos p
+        INNER JOIN mensagens m ON m.projeto_id = p.id
+        WHERE (p.usuario_id = ? AND ? > 0)
+           OR (m.remetente_id = ? AND ? > 0)
+           OR (m.usuario_id = ? AND ? > 0)
+           OR (m.destinatario_id = ? AND ? > 0)
+           OR (LOWER(m.remetente) = LOWER(?) AND ? != '')
+        ORDER BY ultima_data DESC
+      `;
+      params = [userId, userId, userId, userId, userId, userId, userId, userId, userNome, userNome];
     }
+
+    const [conversas] = await pool.query(sql, params);
+    res.json(conversas);
+  } catch (err) {
+    console.error("Erro ao buscar minhas conversas:", err.message);
+    res.json([]);
   }
 };
 
 app.post("/mensagens", autenticarToken, enviarMensagemHandler);
 app.post("/chat", autenticarToken, enviarMensagemHandler);
 
-app.get("/mensagens/:projeto_id", buscarMensagensHandler);
-app.get("/chat/:projeto_id", buscarMensagensHandler);
-
-const minhasConversasHandler = async (req, res) => {
-  const userId = parseInt(req.params.usuario_id, 10) || req.usuario?.id || 0;
-
-  try {
-    const [conversas] = await pool.query(`
-      SELECT DISTINCT
-        p.id AS projeto_id,
-        p.empresa,
-        p.nicho,
-        p.valor,
-        p.porcentagem,
-        COALESCE(
-          (SELECT m.mensagem FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
-          (SELECT m.conteudo FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
-          ''
-        ) AS ultima_msg,
-        COALESCE(
-          (SELECT m.remetente FROM mensagens m WHERE m.projeto_id = p.id ORDER BY m.id DESC LIMIT 1),
-          'Usuário'
-        ) AS autor_nome,
-        (SELECT MAX(m.created_at) FROM mensagens m WHERE m.projeto_id = p.id) AS ultima_data,
-        (SELECT COUNT(*) FROM mensagens m WHERE m.projeto_id = p.id) AS total_mensagens
-      FROM projetos p
-      INNER JOIN mensagens m ON m.projeto_id = p.id
-      ORDER BY ultima_data DESC
-    `);
-
-    res.json(conversas);
-  } catch (err) {
-    console.error("Erro ao buscar minhas conversas:", err.message);
-    try {
-      const [fallback] = await pool.query(`
-        SELECT 
-          projeto_id,
-          CONCAT('Projeto #', projeto_id) AS empresa,
-          COALESCE(mensagem, conteudo, 'Mensagem') AS ultima_msg,
-          COALESCE(remetente, 'Usuário') AS autor_nome,
-          MAX(created_at) AS ultima_data,
-          COUNT(*) AS total_mensagens
-        FROM mensagens
-        GROUP BY projeto_id
-        ORDER BY ultima_data DESC
-      `);
-      res.json(fallback);
-    } catch (e2) {
-      res.status(500).json({ error: "Erro ao carregar conversas", details: err.message });
-    }
-  }
-};
+app.get("/mensagens/:projeto_id", autenticarToken, buscarMensagensHandler);
+app.get("/chat/:projeto_id", autenticarToken, buscarMensagensHandler);
 
 app.get("/minhas-conversas", autenticarToken, minhasConversasHandler);
 app.get("/minhas-conversas/:usuario_id", autenticarToken, minhasConversasHandler);
