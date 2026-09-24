@@ -16,7 +16,8 @@ const configLoja = reactive({
   vitrine: 'grid',
   rodape: 'compacto',
   cor_primaria: '#10b981',
-  cor_secundaria: '#0f172a'
+  cor_secundaria: '#0f172a',
+  cor_terciaria: '#ffffff'
 });
 
 const salvandoLoja = ref(false);
@@ -31,7 +32,8 @@ const salvarConfiguracaoLoja = async () => {
       vitrine_estilo: configLoja.vitrine,
       rodape_estilo: configLoja.rodape,
       cor_primaria: configLoja.cor_primaria,
-      cor_secundaria: configLoja.cor_secundaria
+      cor_secundaria: configLoja.cor_secundaria,
+      cor_terciaria: configLoja.cor_terciaria
     };
 
     await axios.post(`${API_URL}/lojas`, payload);
@@ -65,7 +67,7 @@ const salvarConfiguracaoLoja = async () => {
           />
         </div>
 
-        <!-- NOVO BLOCO: CORES DA LOJA -->
+        <!-- BLOCO DE CORES -->
         <div class="control-box">
           <h3>4. Cores da Identidade</h3>
           <div class="color-picker-group">
@@ -82,6 +84,14 @@ const salvarConfiguracaoLoja = async () => {
               <div class="color-input-wrapper">
                 <input type="color" v-model="configLoja.cor_secundaria" class="color-input" />
                 <code>{{ configLoja.cor_secundaria }}</code>
+              </div>
+            </label>
+
+            <label class="color-picker-item">
+              <span>Cor Terciária (Fundo dos Produtos)</span>
+              <div class="color-input-wrapper">
+                <input type="color" v-model="configLoja.cor_terciaria" class="color-input" />
+                <code>{{ configLoja.cor_terciaria }}</code>
               </div>
             </label>
           </div>
@@ -140,12 +150,12 @@ const salvarConfiguracaoLoja = async () => {
         </div>
       </div>
 
-      <!-- DIREITA: PREVIEW AO VIVO DINÂMICO COM CORES -->
+      <!-- DIREITA: PREVIEW AO VIVO DINÂMICO -->
       <div class="builder-preview">
         <div class="preview-badge">Preview Ao Vivo</div>
         
         <div class="store-canvas">
-          <!-- DUMMY BANNER DYNAMIC COLORS -->
+          <!-- BANNER -->
           <div 
             :class="['store-banner', configLoja.banner]"
             :style="{ backgroundColor: configLoja.cor_secundaria, color: '#ffffff' }"
@@ -155,8 +165,11 @@ const salvarConfiguracaoLoja = async () => {
             <p v-else>‹ Slide 1 de 3: Lançamentos e Ofertas ›</p>
           </div>
 
-          <!-- DUMMY VITRINE -->
-          <div class="store-body">
+          <!-- SEÇÃO DE PRODUTOS COM COR TERCIÁRIA NO FUNDO -->
+          <div 
+            class="store-body"
+            :style="{ backgroundColor: configLoja.cor_terciaria }"
+          >
             <h3>Nossos Produtos</h3>
             <div v-if="configLoja.vitrine === 'grid'" class="grid-products">
               <div class="product-item" v-for="i in 3" :key="i">
@@ -180,7 +193,7 @@ const salvarConfiguracaoLoja = async () => {
             </div>
           </div>
 
-          <!-- DUMMY RODAPÉ DYNAMIC COLORS -->
+          <!-- RODAPÉ -->
           <div 
             :class="['store-footer', configLoja.rodape]"
             :style="{ backgroundColor: configLoja.cor_secundaria }"
@@ -397,6 +410,7 @@ const salvarConfiguracaoLoja = async () => {
 .store-body {
   padding: 24px;
   flex: 1;
+  transition: background-color 0.3s ease;
 }
 
 .store-body h3 {
@@ -428,6 +442,7 @@ const salvarConfiguracaoLoja = async () => {
 
 .product-item {
   border: 1px solid #e2e8f0;
+  background: #ffffff;
   padding: 12px;
   border-radius: 6px;
   text-align: center;

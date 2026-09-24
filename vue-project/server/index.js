@@ -198,7 +198,7 @@ const inicializarBanco = async () => {
       )
     `);
 
-    // TABELA: CoNexo Builder / Criar Loja
+    // TABELA: CoNexo Builder / Criar Loja (incluindo as três cores)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS lojas (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -209,11 +209,12 @@ const inicializarBanco = async () => {
         rodape_estilo VARCHAR(50),
         cor_primaria VARCHAR(20) DEFAULT '#10b981',
         cor_secundaria VARCHAR(20) DEFAULT '#0f172a',
+        cor_terciaria VARCHAR(20) DEFAULT '#ffffff',
         data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // 2. MIGRAÇÕES AUTOMÁTICAS (Caso as tabelas já existissem sem novas colunas)
+    // 2. MIGRAÇÕES AUTOMÁTICAS (Garante suporte a bancos de dados já existentes)
     try {
       await pool.query("ALTER TABLE projetos ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'");
       console.log("🆕 Coluna status adicionada em projetos!");
@@ -232,6 +233,11 @@ const inicializarBanco = async () => {
     try {
       await pool.query("ALTER TABLE lojas ADD COLUMN cor_secundaria VARCHAR(20) DEFAULT '#0f172a'");
       console.log("🆕 Coluna cor_secundaria adicionada em lojas!");
+    } catch (e) { }
+
+    try {
+      await pool.query("ALTER TABLE lojas ADD COLUMN cor_terciaria VARCHAR(20) DEFAULT '#ffffff'");
+      console.log("🆕 Coluna cor_terciaria adicionada em lojas!");
     } catch (e) { }
 
     console.log("✅ Banco de dados pronto e atualizado!");
@@ -313,11 +319,11 @@ app.post("/ideias", async (req, res) => {
 
 // ROTA: Salvar personalização do CoNexo Builder
 app.post("/lojas", async (req, res) => {
-  const { nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo, cor_primaria, cor_secundaria } = req.body;
+  const { nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo, cor_primaria, cor_secundaria, cor_terciaria } = req.body;
   try {
     await pool.query(
-      `INSERT INTO lojas (nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo, cor_primaria, cor_secundaria) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO lojas (nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo, cor_primaria, cor_secundaria, cor_terciaria) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         nome_loja || 'Minha Loja CoNexo',
         usuario_id || null,
@@ -325,7 +331,8 @@ app.post("/lojas", async (req, res) => {
         vitrine_estilo,
         rodape_estilo,
         cor_primaria || '#10b981',
-        cor_secundaria || '#0f172a'
+        cor_secundaria || '#0f172a',
+        cor_terciaria || '#ffffff'
       ]
     );
 
