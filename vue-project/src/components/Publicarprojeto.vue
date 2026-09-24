@@ -771,4 +771,79 @@ const fecharChat = () => {
 .filter-reset-btn:hover {
   background: #fee2e2;
 }
+
+/* ─── RESPONSIVIDADE MOBILE ─────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .page-layout {
+    flex-direction: column;
+    gap: var(--cx-space-8);
+  }
+
+  .page-form-col {
+    flex: 1 1 100%;
+    width: 100%;
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-inner {
+    padding: var(--cx-space-6) var(--cx-space-4);
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: var(--cx-space-4);
+  }
+
+  .filter-group {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .filter-item {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .filter-reset-btn {
+    width: 100%;
+    text-align: center;
+    padding: 10px;
+    margin-top: 4px;
+  }
+
+  .project-item {
+    padding: var(--cx-space-4);
+  }
+
+  .project-item__foot {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--cx-space-4);
+  }
+
+  .project-item__financials {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .project-item__actions {
+    width: 100%;
+  }
+
+  .cx-btn-action {
+    width: 100%;
+    text-align: center;
+    padding: 12px;
+  }
+
+  .chat-modal {
+    width: 95%;
+    max-width: 100%;
+    height: 90vh;
+    border-radius: 12px;
+  }
+}
 </style>

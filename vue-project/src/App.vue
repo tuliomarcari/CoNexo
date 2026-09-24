@@ -206,9 +206,10 @@ onMounted(() => {
         <!-- Toggle mobile -->
         <button
           class="cx-nav-toggle"
+          :class="{ 'cx-nav-toggle--open': menuMobileAberto }"
           @click="menuMobileAberto = !menuMobileAberto"
           :aria-expanded="menuMobileAberto"
-          aria-label="Menu"
+          aria-label="Menu de Navegação"
         >
           <span></span><span></span><span></span>
         </button>
@@ -217,19 +218,28 @@ onMounted(() => {
 
       <!-- Menu mobile -->
       <div class="cx-nav-mobile" :class="{ 'cx-nav-mobile--open': menuMobileAberto }">
-        <button class="cx-nav-mobile__link" @click="navegar('home')">Início</button>
-        <button class="cx-nav-mobile__link" @click="navegar('publicar')">Projetos</button>
-        <button class="cx-nav-mobile__link" @click="navegar('ideias')">Ideias</button>
-        <button class="cx-nav-mobile__link cx-nav-mobile__link--primary" @click="navegar('criar-loja')">Criar Loja</button>
-        <button v-if="usuarioLogado?.nivel === 'admin'" class="cx-nav-mobile__link" @click="navegar('admin')">Admin</button>
-        <button v-if="usuarioLogado" class="cx-nav-mobile__link cx-nav-mobile__link--messages" @click="abrirCentralConversas(); menuMobileAberto = false;">💬 Mensagens</button>
+        <button class="cx-nav-mobile__link" @click="navegar('home')">🏠 Início</button>
+        <button class="cx-nav-mobile__link" @click="navegar('publicar')">🚀 Projetos</button>
+        <button class="cx-nav-mobile__link" @click="navegar('ideias')">💡 Ideias</button>
+        <button class="cx-nav-mobile__link cx-nav-mobile__link--primary" @click="navegar('criar-loja')">🏪 Criar Loja</button>
+        <button v-if="usuarioLogado?.nivel === 'admin'" class="cx-nav-mobile__link cx-nav-mobile__link--admin" @click="navegar('admin')">⚡ Admin</button>
+        
         <div class="cx-nav-mobile__divider"></div>
+
         <template v-if="usuarioLogado">
-          <button class="cx-nav-mobile__link cx-nav-mobile__link--danger" @click="deslogar">Sair da conta</button>
+          <div class="cx-nav-mobile__user">
+            <div class="cx-user__avatar">{{ usuarioLogado.nome.charAt(0).toUpperCase() }}</div>
+            <div class="cx-nav-mobile__user-meta">
+              <span class="cx-user__name-mobile">Olá, {{ usuarioLogado.nome.split(' ')[0] }}</span>
+              <span class="cx-user__email-mobile" v-if="usuarioLogado.email">{{ usuarioLogado.email }}</span>
+            </div>
+          </div>
+          <button class="cx-nav-mobile__link cx-nav-mobile__link--messages" @click="abrirCentralConversas(); menuMobileAberto = false;">💬 Central de Mensagens</button>
+          <button class="cx-nav-mobile__link cx-nav-mobile__link--danger" @click="deslogar">🚪 Sair da conta</button>
         </template>
         <template v-else>
-          <button class="cx-nav-mobile__link" @click="navegar('login')">Entrar</button>
-          <button class="cx-nav-mobile__link cx-nav-mobile__link--primary" @click="navegar('cadastro')">Criar conta</button>
+          <button class="cx-nav-mobile__link" @click="navegar('login')">🔑 Entrar</button>
+          <button class="cx-nav-mobile__link cx-nav-mobile__link--cta" @click="navegar('cadastro')">✨ Criar conta gratuita</button>
         </template>
       </div>
     </header>
@@ -479,43 +489,86 @@ onMounted(() => {
 .cx-nav-toggle {
   display: none;
   flex-direction: column;
+  justify-content: center;
   gap: 5px;
   background: none;
   border: none;
   cursor: pointer;
-  padding: var(--cx-space-2);
+  padding: 8px;
   margin-left: auto;
+  z-index: 101;
 }
 
 .cx-nav-toggle span {
   display: block;
-  width: 22px;
+  width: 24px;
   height: 2px;
-  background: rgba(255,255,255,0.7);
+  background: rgba(255,255,255,0.85);
   border-radius: 2px;
-  transition: background var(--cx-transition-fast);
+  transition: transform 0.25s ease, opacity 0.25s ease, background 0.25s ease;
 }
 
 .cx-nav-toggle:hover span {
   background: #ffffff;
 }
 
-/* Mobile menu */
+.cx-nav-toggle--open span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.cx-nav-toggle--open span:nth-child(2) {
+  opacity: 0;
+}
+
+.cx-nav-toggle--open span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* Mobile menu drawer */
 .cx-nav-mobile {
   display: none;
   flex-direction: column;
-  background: var(--cx-dark-2);
+  background: rgba(15, 23, 42, 0.98);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-top: 1px solid var(--cx-dark-border);
-  padding: var(--cx-space-4) var(--cx-space-6);
-  gap: var(--cx-space-1);
+  padding: 0 var(--cx-space-6);
+  gap: 4px;
   max-height: 0;
   overflow: hidden;
-  transition: max-height var(--cx-transition-slow), padding var(--cx-transition-base);
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease;
 }
 
 .cx-nav-mobile--open {
-  max-height: 400px;
+  max-height: 550px;
   padding: var(--cx-space-4) var(--cx-space-6);
+}
+
+.cx-nav-mobile__user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+
+.cx-nav-mobile__user-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.cx-user__name-mobile {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.cx-user__email-mobile {
+  font-size: 0.78rem;
+  color: var(--cx-text-faint);
 }
 
 .cx-nav-mobile__link {
@@ -523,23 +576,35 @@ onMounted(() => {
   border: none;
   color: var(--cx-text-faint);
   font-family: var(--cx-font-sans);
-  font-size: var(--cx-text-base);
+  font-size: 0.98rem;
   font-weight: 500;
   text-align: left;
-  padding: var(--cx-space-3) var(--cx-space-2);
+  padding: 12px 14px;
   cursor: pointer;
   border-radius: var(--cx-radius-md);
   transition: color var(--cx-transition-fast), background var(--cx-transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.cx-nav-mobile__link:hover {
+.cx-nav-mobile__link:hover, .cx-nav-mobile__link:active {
   color: #ffffff;
-  background: rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.08);
 }
 
 .cx-nav-mobile__link--primary {
   color: var(--cx-primary);
   font-weight: 600;
+}
+
+.cx-nav-mobile__link--cta {
+  background: var(--cx-primary) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  justify-content: center !important;
+  margin-top: 4px;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .cx-nav-mobile__link--danger {
@@ -549,7 +614,7 @@ onMounted(() => {
 .cx-nav-mobile__divider {
   height: 1px;
   background: var(--cx-dark-border);
-  margin: var(--cx-space-2) 0;
+  margin: 6px 0;
 }
 
 /* ─── Responsivo ────────────────────────────────────────────────────────────── */
@@ -561,8 +626,7 @@ onMounted(() => {
 
   .cx-navbar__inner {
     height: var(--cx-navbar-h);
-    padding: 0 var(--cx-space-6);
-    flex-wrap: wrap;
+    padding: 0 var(--cx-space-4);
   }
 
   .cx-nav,

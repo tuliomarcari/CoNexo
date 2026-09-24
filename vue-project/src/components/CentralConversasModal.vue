@@ -798,6 +798,29 @@ onUnmounted(() => {
 
 /* ─── RESPONSIVIDADE MOBILE ─────────────────────────────────────────────────── */
 @media (max-width: 768px) {
+  .cx-modal-overlay {
+    padding: 0;
+  }
+
+  .cx-modal-container {
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+
+  .cx-modal-header {
+    padding: 12px 16px;
+  }
+
+  .cx-modal-sub {
+    display: none;
+  }
+
+  .cx-modal-title {
+    font-size: 1rem;
+  }
+
   .cx-modal-body {
     grid-template-columns: 1fr;
   }
@@ -812,10 +835,44 @@ onUnmounted(() => {
 
   .cx-modal-body--mobile-chat .cx-chat-main {
     display: flex;
+    height: 100%;
+  }
+
+  .cx-chat-topbar {
+    padding: 10px 14px;
   }
 
   .cx-chat-back-btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+  }
+
+  .cx-messages-history {
+    padding: 12px;
+  }
+
+  .cx-msg-bubble {
+    max-width: 88%;
+  }
+
+  .cx-chat-input-bar {
+    padding: 10px 12px;
+  }
+
+  .cx-chat-input {
+    font-size: 0.95rem;
+    padding: 12px;
+  }
+
+  .cx-chat-send-btn {
+    padding: 0 16px;
+    font-size: 0.88rem;
   }
 }
 </style>
