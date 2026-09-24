@@ -141,7 +141,8 @@ const configurarCors = () => {
 };
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(configurarCors());
 
 const pool = mysql.createPool({
@@ -183,7 +184,7 @@ const inicializarBanco = async () => {
         usuario_id INT, 
         email_contato VARCHAR(255), 
         telefone VARCHAR(20), 
-        imagem_url TEXT,
+        imagem_url LONGTEXT,
         status VARCHAR(20) DEFAULT 'pendente'
       )
     `);
@@ -194,6 +195,8 @@ const inicializarBanco = async () => {
         titulo VARCHAR(255), 
         nicho VARCHAR(100), 
         descricao TEXT, 
+        likes INT DEFAULT 0,
+        dislikes INT DEFAULT 0,
         data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
         status VARCHAR(20) DEFAULT 'pendente'
       )
@@ -222,13 +225,23 @@ const inicializarBanco = async () => {
     } catch (e) { }
 
     try {
-      await pool.query("ALTER TABLE projetos ADD COLUMN imagem_url TEXT");
+      await pool.query("ALTER TABLE projetos ADD COLUMN imagem_url LONGTEXT");
       console.log("🆕 Coluna imagem_url adicionada em projetos!");
     } catch (e) { }
 
     try {
       await pool.query("ALTER TABLE ideias ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'");
       console.log("🆕 Coluna status adicionada em ideias!");
+    } catch (e) { }
+
+    try {
+      await pool.query("ALTER TABLE ideias ADD COLUMN likes INT DEFAULT 0");
+      console.log("🆕 Coluna likes adicionada em ideias!");
+    } catch (e) { }
+
+    try {
+      await pool.query("ALTER TABLE ideias ADD COLUMN dislikes INT DEFAULT 0");
+      console.log("🆕 Coluna dislikes adicionada em ideias!");
     } catch (e) { }
 
     try {
@@ -333,6 +346,27 @@ app.post("/ideias", async (req, res) => {
   } catch (err) {
     console.error("Erro ao cadastrar ideia:", err);
     res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// ROTA: Votar em uma ideia (Like / Dislike)
+app.put("/ideias/:id/votar", async (req, res) => {
+  const { id } = req.params;
+  const { tipo } = req.body;
+
+  if (tipo !== 'like' && tipo !== 'dislike') {
+    return res.status(400).json({ error: "Tipo de voto inválido. Use 'like' ou 'dislike'." });
+  }
+
+  try {
+    const coluna = tipo === 'like' ? 'likes' : 'dislikes';
+    await pool.query(`UPDATE ideias SET ${coluna} = ${coluna} + 1 WHERE id = ?`, [id]);
+
+    const [rows] = await pool.query("SELECT likes, dislikes FROM ideias WHERE id = ?", [id]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error("Erro ao votar na ideia:", err);
+    res.status(500).json({ error: "Erro interno ao registrar voto" });
   }
 });
 

@@ -92,11 +92,40 @@
               <h3 class="ideia-card__title">{{ item.titulo }}</h3>
               <p class="ideia-card__desc">{{ item.descricao }}</p>
 
+              <!-- RODAPÉ DO CARD COM VOTAÇÃO E DATA -->
               <footer class="ideia-card__foot">
                 <span class="ideia-card__date" v-if="item.data_criacao">
                   {{ new Date(item.data_criacao).toLocaleDateString('pt-BR') }}
                 </span>
+
+                <!-- BOTÕES DE LIKE E DISLIKE -->
+                <div class="vote-group">
+                  <button 
+                    type="button"
+                    class="vote-btn vote-btn--like" 
+                    @click="votar(item, 'like')"
+                    title="Achei uma boa ideia"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                    </svg>
+                    <span>{{ item.likes || 0 }}</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    class="vote-btn vote-btn--dislike" 
+                    @click="votar(item, 'dislike')"
+                    title="Não achei uma boa ideia"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/>
+                    </svg>
+                    <span>{{ item.dislikes || 0 }}</span>
+                  </button>
+                </div>
               </footer>
+
             </article>
           </div>
         </section>
@@ -108,6 +137,8 @@
 
 <script setup>
 import { ref } from 'vue';
+import axios from 'axios';
+import { API_URL } from '../config';
 
 const props = defineProps(['ideias', 'user']);
 const emit = defineEmits(['nova-ideia', 'excluir']);
@@ -117,6 +148,16 @@ const form = ref({ titulo: '', nicho: '', descricao: '' });
 const enviar = () => {
   emit('nova-ideia', { ...form.value });
   form.value = { titulo: '', nicho: '', descricao: '' };
+};
+
+const votar = async (item, tipo) => {
+  try {
+    const res = await axios.put(`${API_URL}/ideias/${item.id}/votar`, { tipo });
+    item.likes = res.data.likes;
+    item.dislikes = res.data.dislikes;
+  } catch (err) {
+    console.error("Erro ao votar na ideia:", err);
+  }
 };
 </script>
 
@@ -346,12 +387,54 @@ const enviar = () => {
 .ideia-card__foot {
   border-top: 1px solid var(--cx-border-soft);
   padding-top: var(--cx-space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .ideia-card__date {
   font-size: var(--cx-text-xs);
   color: var(--cx-text-faint);
   letter-spacing: 0.03em;
+}
+
+/* BOTÕES DE VOTAÇÃO */
+.vote-group {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2);
+}
+
+.vote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--cx-radius-md);
+  font-size: var(--cx-text-xs);
+  font-weight: 600;
+  font-family: var(--cx-font-sans);
+  border: 1px solid var(--cx-border);
+  background: var(--cx-bg);
+  color: var(--cx-text-2);
+  cursor: pointer;
+  transition: border-color var(--cx-transition-fast), color var(--cx-transition-fast), background var(--cx-transition-fast);
+}
+
+.vote-btn svg {
+  flex-shrink: 0;
+}
+
+.vote-btn--like:hover {
+  border-color: var(--cx-primary);
+  color: var(--cx-primary-dark);
+  background: var(--cx-primary-light);
+}
+
+.vote-btn--dislike:hover {
+  border-color: #fecaca;
+  color: #b91c1c;
+  background: #fef2f2;
 }
 
 /* Empty state */
