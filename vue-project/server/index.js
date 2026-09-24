@@ -32,6 +32,17 @@ async function inicializarBanco() {
   }
 }
 
+// Rota de listagem pública de projetos aprovados
+app.get("/projetos", async (req, res) => {
+  try {
+    const [projetos] = await pool.query("SELECT * FROM projetos WHERE status = 'aprovado' ORDER BY id DESC");
+    res.json(projetos);
+  } catch (err) {
+    console.error("Erro ao carregar projetos aprovados:", err);
+    res.status(500).json({ error: "Erro ao carregar projetos" });
+  }
+});
+
 // Rota de Cadastro de Projetos
 app.post("/projetos", async (req, res) => {
   const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, email, telefone, imagem_url } = req.body;
@@ -94,12 +105,19 @@ app.put("/admin/aprovar/:id", async (req, res) => {
   const { id } = req.params;
   const { tipo } = req.body;
   const tabela = tipo === 'ideia' ? 'ideias' : 'projetos';
+
   try {
-    await pool.query(`UPDATE ${tabela} SET status = 'aprovado' WHERE id = ?`, [id]);
+    console.log(`[Admin] A aprovar ${tabela} com ID: ${id}`);
+    const [resultado] = await pool.query(`UPDATE ${tabela} SET status = 'aprovado' WHERE id = ?`, [id]);
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({ error: "Item não encontrado para aprovação." });
+    }
+
     res.json({ message: "Item aprovado com sucesso!" });
   } catch (err) {
-    console.error("Erro ao aprovar item:", err);
-    res.status(500).json({ error: "Erro ao aprovar item" });
+    console.error("❌ Erro ao aprovar item:", err);
+    res.status(500).json({ error: "Erro ao aprovar item", details: err.message });
   }
 });
 
