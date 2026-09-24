@@ -157,10 +157,34 @@ const pool = mysql.createPool({
   queueLimit: 0
 }).promise();
 
-// Inicialização das tabelas com correção automática de colunas
+// Middleware de verificação de token
+const autenticarToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (!token) {
+    return res.status(401).json({ error: "Token não informado" });
+  }
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.usuario = payload;
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: "Token inválido ou expirado" });
+  }
+};
+
+const exigirAdmin = (req, res, next) => {
+  if (!req.usuario || req.usuario.nivel !== 'admin') {
+    return res.status(403).json({ error: "Acesso negado" });
+  }
+  next();
+};
+
+// Inicialização das tabelas com suporte a controle individual de voto
 const inicializarBanco = async () => {
   try {
-    // 1. Criação das tabelas
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY, 
@@ -195,14 +219,22 @@ const inicializarBanco = async () => {
         titulo VARCHAR(255), 
         nicho VARCHAR(100), 
         descricao TEXT, 
-        likes INT DEFAULT 0,
-        dislikes INT DEFAULT 0,
         data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
         status VARCHAR(20) DEFAULT 'pendente'
       )
     `);
 
-    // TABELA: CoNexo Builder / Criar Loja
+    // TABELA DE VOTOS DE IDEIAS (RESTRICAO 1 VOTO POR USUÁRIO PER IDEIA)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS votos_ideias (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        usuario_id INT NOT NULL,
+        ideia_id INT NOT NULL,
+        tipo_voto VARCHAR(10) NOT NULL, -- 'like' ou 'dislike'
+        UNIQUE KEY uq_usuario_ideia (usuario_id, ideia_id)
+      )
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS lojas (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -217,47 +249,6 @@ const inicializarBanco = async () => {
         data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-
-    // 2. MIGRAÇÕES AUTOMÁTICAS
-    try {
-      await pool.query("ALTER TABLE projetos ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'");
-      console.log("🆕 Coluna status adicionada em projetos!");
-    } catch (e) { }
-
-    try {
-      await pool.query("ALTER TABLE projetos ADD COLUMN imagem_url LONGTEXT");
-      console.log("🆕 Coluna imagem_url adicionada em projetos!");
-    } catch (e) { }
-
-    try {
-      await pool.query("ALTER TABLE ideias ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'");
-      console.log("🆕 Coluna status adicionada em ideias!");
-    } catch (e) { }
-
-    try {
-      await pool.query("ALTER TABLE ideias ADD COLUMN likes INT DEFAULT 0");
-      console.log("🆕 Coluna likes adicionada em ideias!");
-    } catch (e) { }
-
-    try {
-      await pool.query("ALTER TABLE ideias ADD COLUMN dislikes INT DEFAULT 0");
-      console.log("🆕 Coluna dislikes adicionada em ideias!");
-    } catch (e) { }
-
-    try {
-      await pool.query("ALTER TABLE lojas ADD COLUMN cor_primaria VARCHAR(20) DEFAULT '#10b981'");
-      console.log("🆕 Coluna cor_primaria adicionada em lojas!");
-    } catch (e) { }
-
-    try {
-      await pool.query("ALTER TABLE lojas ADD COLUMN cor_secundaria VARCHAR(20) DEFAULT '#0f172a'");
-      console.log("🆕 Coluna cor_secundaria adicionada em lojas!");
-    } catch (e) { }
-
-    try {
-      await pool.query("ALTER TABLE lojas ADD COLUMN cor_terciaria VARCHAR(20) DEFAULT '#ffffff'");
-      console.log("🆕 Coluna cor_terciaria adicionada em lojas!");
-    } catch (e) { }
 
     console.log("✅ Banco de dados pronto e atualizado!");
   } catch (err) {
@@ -349,23 +340,61 @@ app.post("/ideias", async (req, res) => {
   }
 });
 
-// ROTA: Votar em uma ideia (Like / Dislike)
-app.put("/ideias/:id/votar", async (req, res) => {
-  const { id } = req.params;
-  const { tipo } = req.body;
+// ROTA AUTENTICADA: Votar em uma ideia (Limite de 1 voto por perfil em cada ideia)
+app.put("/ideias/:id/votar", autenticarToken, async (req, res) => {
+  const ideia_id = req.params.id;
+  const usuario_id = req.usuario.id;
+  const { tipo } = req.body; // 'like' ou 'dislike'
 
   if (tipo !== 'like' && tipo !== 'dislike') {
     return res.status(400).json({ error: "Tipo de voto inválido. Use 'like' ou 'dislike'." });
   }
 
   try {
-    const coluna = tipo === 'like' ? 'likes' : 'dislikes';
-    await pool.query(`UPDATE ideias SET ${coluna} = ${coluna} + 1 WHERE id = ?`, [id]);
+    // Verificar se o usuário já votou nesta ideia
+    const [existente] = await pool.query(
+      "SELECT id, tipo_voto FROM votos_ideias WHERE usuario_id = ? AND ideia_id = ?",
+      [usuario_id, ideia_id]
+    );
 
-    const [rows] = await pool.query("SELECT likes, dislikes FROM ideias WHERE id = ?", [id]);
-    res.json(rows[0]);
+    if (existente.length > 0) {
+      const votoAtual = existente[0].tipo_voto;
+      if (votoAtual === tipo) {
+        // Clicou no mesmo botão -> Remove o voto
+        await pool.query("DELETE FROM votos_ideias WHERE id = ?", [existente[0].id]);
+      } else {
+        // Clicou no botão diferente -> Alterna o voto
+        await pool.query("UPDATE votos_ideias SET tipo_voto = ? WHERE id = ?", [tipo, existente[0].id]);
+      }
+    } else {
+      // Registrar novo voto
+      await pool.query(
+        "INSERT INTO votos_ideias (usuario_id, ideia_id, tipo_voto) VALUES (?, ?, ?)",
+        [usuario_id, ideia_id, tipo]
+      );
+    }
+
+    // Calcular contagens totais e recuperar o voto atual do perfil
+    const [contagem] = await pool.query(`
+      SELECT 
+        SUM(CASE WHEN tipo_voto = 'like' THEN 1 ELSE 0 END) AS likes,
+        SUM(CASE WHEN tipo_voto = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+      FROM votos_ideias 
+      WHERE ideia_id = ?
+    `, [ideia_id]);
+
+    const [votoPerfil] = await pool.query(
+      "SELECT tipo_voto FROM votos_ideias WHERE usuario_id = ? AND ideia_id = ?",
+      [usuario_id, ideia_id]
+    );
+
+    res.json({
+      likes: Number(contagem[0].likes || 0),
+      dislikes: Number(contagem[0].dislikes || 0),
+      meu_voto: votoPerfil.length > 0 ? votoPerfil[0].tipo_voto : null
+    });
   } catch (err) {
-    console.error("Erro ao votar na ideia:", err);
+    console.error("Erro ao registrar voto na ideia:", err);
     res.status(500).json({ error: "Erro interno ao registrar voto" });
   }
 });
@@ -409,7 +438,18 @@ app.get("/projetos", async (req, res) => {
 
 app.get("/ideias", async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM ideias WHERE status = 'aprovado' ORDER BY id DESC");
+    // Retorna a lista de ideias aprovadas com a contagem total de likes e dislikes
+    const [rows] = await pool.query(`
+      SELECT 
+        i.*,
+        COALESCE(SUM(CASE WHEN v.tipo_voto = 'like' THEN 1 ELSE 0 END), 0) AS likes,
+        COALESCE(SUM(CASE WHEN v.tipo_voto = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes
+      FROM ideias i
+      LEFT JOIN votos_ideias v ON i.id = v.ideia_id
+      WHERE i.status = 'aprovado'
+      GROUP BY i.id
+      ORDER BY i.id DESC
+    `);
     res.json(rows);
   } catch (err) {
     console.error("Erro ao listar ideias:", err);
@@ -417,32 +457,7 @@ app.get("/ideias", async (req, res) => {
   }
 });
 
-// --- MIDDLEWARES DE AUTENTICAÇÃO E AUTORIZAÇÃO ---
-const autenticarToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-
-  if (!token) {
-    return res.status(401).json({ error: "Token não informado" });
-  }
-
-  try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    req.usuario = payload;
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: "Token inválido ou expirado" });
-  }
-};
-
-const exigirAdmin = (req, res, next) => {
-  if (!req.usuario || req.usuario.nivel !== 'admin') {
-    return res.status(403).json({ error: "Acesso negado" });
-  }
-  next();
-};
-
-// --- ROTAS ADMIN ---
+// ROTAS ADMIN
 app.get("/admin/pendentes", autenticarToken, exigirAdmin, async (req, res) => {
   try {
     const [projetos] = await pool.query("SELECT *, 'projeto' as tipo_item FROM projetos WHERE status = 'pendente'");
@@ -453,7 +468,6 @@ app.get("/admin/pendentes", autenticarToken, exigirAdmin, async (req, res) => {
   }
 });
 
-// ROTA ADMIN: Listar lojas e vitrines criadas pelos usuários
 app.get("/admin/lojas", autenticarToken, exigirAdmin, async (req, res) => {
   try {
     const [lojas] = await pool.query(`
@@ -472,7 +486,6 @@ app.get("/admin/lojas", autenticarToken, exigirAdmin, async (req, res) => {
   }
 });
 
-// ROTA ADMIN: Deletar solicitação de loja
 app.delete("/admin/lojas/:id", autenticarToken, exigirAdmin, async (req, res) => {
   try {
     await pool.query("DELETE FROM lojas WHERE id = ?", [req.params.id]);

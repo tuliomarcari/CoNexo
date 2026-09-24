@@ -102,7 +102,8 @@
                 <div class="vote-group">
                   <button 
                     type="button"
-                    class="vote-btn vote-btn--like" 
+                    class="vote-btn vote-btn--like"
+                    :class="{ 'vote-btn--active-like': item.meu_voto === 'like' }"
                     @click="votar(item, 'like')"
                     title="Achei uma boa ideia"
                   >
@@ -114,7 +115,8 @@
 
                   <button 
                     type="button"
-                    class="vote-btn vote-btn--dislike" 
+                    class="vote-btn vote-btn--dislike"
+                    :class="{ 'vote-btn--active-dislike': item.meu_voto === 'dislike' }"
                     @click="votar(item, 'dislike')"
                     title="Não achei uma boa ideia"
                   >
@@ -151,12 +153,28 @@ const enviar = () => {
 };
 
 const votar = async (item, tipo) => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert("Você precisa estar conectado para votar nas ideias.");
+    return;
+  }
+
   try {
-    const res = await axios.put(`${API_URL}/ideias/${item.id}/votar`, { tipo });
+    const res = await axios.put(
+      `${API_URL}/ideias/${item.id}/votar`,
+      { tipo },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
     item.likes = res.data.likes;
     item.dislikes = res.data.dislikes;
+    item.meu_voto = res.data.meu_voto;
   } catch (err) {
     console.error("Erro ao votar na ideia:", err);
+    if (err.response?.status === 401) {
+      alert("Sua sessão expirou. Faça login novamente para votar.");
+    } else {
+      alert("Erro ao registrar seu voto. Tente novamente.");
+    }
   }
 };
 </script>
@@ -425,13 +443,13 @@ const votar = async (item, tipo) => {
   flex-shrink: 0;
 }
 
-.vote-btn--like:hover {
+.vote-btn--like:hover, .vote-btn--active-like {
   border-color: var(--cx-primary);
   color: var(--cx-primary-dark);
   background: var(--cx-primary-light);
 }
 
-.vote-btn--dislike:hover {
+.vote-btn--dislike:hover, .vote-btn--active-dislike {
   border-color: #fecaca;
   color: #b91c1c;
   background: #fef2f2;
