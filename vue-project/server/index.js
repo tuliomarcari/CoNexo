@@ -419,6 +419,17 @@ app.get("/admin/lojas", autenticarToken, exigirAdmin, async (req, res) => {
   }
 });
 
+// ROTA ADMIN: Deletar solicitação de loja
+app.delete("/admin/lojas/:id", autenticarToken, exigirAdmin, async (req, res) => {
+  try {
+    await pool.query("DELETE FROM lojas WHERE id = ?", [req.params.id]);
+    res.json({ message: "Loja removida com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao remover loja no admin:", err);
+    res.status(500).json({ error: "Erro interno ao remover solicitação de loja" });
+  }
+});
+
 app.put("/admin/aprovar/:id", autenticarToken, exigirAdmin, async (req, res) => {
   const { id } = req.params;
   const { tipo } = req.body;

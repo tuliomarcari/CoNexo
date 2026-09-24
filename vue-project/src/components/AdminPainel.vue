@@ -34,7 +34,6 @@
           <span v-if="ideiasPendentes.length > 0" class="admin-nav__badge">{{ ideiasPendentes.length }}</span>
         </button>
 
-        <!-- NOVA ABA: Solicitações de Lojas (CoNexo Builder) -->
         <button
           class="admin-nav__item"
           :class="{ 'admin-nav__item--active': abaAtiva === 'lojas' }"
@@ -86,7 +85,6 @@
           </button>
         </div>
 
-        <!-- Erro de acesso -->
         <div v-if="erroAcesso" class="admin-alert admin-alert--error" role="alert">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" aria-hidden="true">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -94,7 +92,6 @@
           {{ erroAcesso }}
         </div>
 
-        <!-- Empty state -->
         <div v-else-if="!erroAcesso && listaAtual.length === 0" class="admin-empty" role="status">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="36" height="36" aria-hidden="true">
             <path d="M9 11l3 3L22 4"/>
@@ -103,7 +100,6 @@
           <p>Nenhum(a) {{ abaAtiva === 'projetos' ? 'projeto' : 'ideia' }} aguardando aprovação.</p>
         </div>
 
-        <!-- Grid de pendentes -->
         <div class="admin-grid" v-else>
           <article class="admin-card" v-for="item in listaAtual" :key="item.id">
             <header class="admin-card__head">
@@ -204,6 +200,9 @@
               >
                 Enviar E-mail
               </a>
+              <button class="admin-btn admin-btn--reject" @click="deletarLoja(loja.id)">
+                Excluir
+              </button>
             </footer>
           </article>
         </div>
@@ -307,6 +306,18 @@ const rejeitar = async (item) => {
     await axios.delete(`${API_URL}/${rota}/${item.id}`, { headers });
     await carregarDadosAdmin();
     emit('dados-atualizados');
+  } catch (err) {
+    tratarErroAdmin(err);
+  }
+};
+
+const deletarLoja = async (id) => {
+  if (!confirm("Deseja realmente apagar esta solicitação de loja?")) return;
+  const headers = getAuthHeaders();
+  if (!headers) { erroAcesso.value = 'Sessão não encontrada. Faça login novamente.'; return; }
+  try {
+    await axios.delete(`${API_URL}/admin/lojas/${id}`, { headers });
+    await carregarDadosAdmin();
   } catch (err) {
     tratarErroAdmin(err);
   }
