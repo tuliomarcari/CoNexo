@@ -182,7 +182,7 @@ const exigirAdmin = (req, res, next) => {
   next();
 };
 
-// Inicialização das tabelas com suporte a controle individual de voto
+// Inicialização das tabelas
 const inicializarBanco = async () => {
   try {
     await pool.query(`
@@ -224,14 +224,26 @@ const inicializarBanco = async () => {
       )
     `);
 
-    // TABELA DE VOTOS DE IDEIAS (RESTRICAO 1 VOTO POR USUÁRIO PER IDEIA)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS votos_ideias (
         id INT AUTO_INCREMENT PRIMARY KEY,
         usuario_id INT NOT NULL,
         ideia_id INT NOT NULL,
-        tipo_voto VARCHAR(10) NOT NULL, -- 'like' ou 'dislike'
+        tipo_voto VARCHAR(10) NOT NULL,
         UNIQUE KEY uq_usuario_ideia (usuario_id, ideia_id)
+      )
+    `);
+
+    // TABELA DE MENSAGENS / CHAT DE NEGOCIAÇÕES
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS mensagens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        projeto_id INT NOT NULL,
+        remetente_id INT NOT NULL,
+        destinatario_id INT NOT NULL,
+        mensagem TEXT NOT NULL,
+        data_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE
       )
     `);
 
@@ -340,41 +352,35 @@ app.post("/ideias", async (req, res) => {
   }
 });
 
-// ROTA AUTENTICADA: Votar em uma ideia (Limite de 1 voto por perfil em cada ideia)
+// VOTAÇÃO DE IDEIAS
 app.put("/ideias/:id/votar", autenticarToken, async (req, res) => {
   const ideia_id = req.params.id;
   const usuario_id = req.usuario.id;
-  const { tipo } = req.body; // 'like' ou 'dislike'
+  const { tipo } = req.body;
 
   if (tipo !== 'like' && tipo !== 'dislike') {
-    return res.status(400).json({ error: "Tipo de voto inválido. Use 'like' ou 'dislike'." });
+    return res.status(400).json({ error: "Tipo de voto inválido." });
   }
 
   try {
-    // Verificar se o usuário já votou nesta ideia
     const [existente] = await pool.query(
       "SELECT id, tipo_voto FROM votos_ideias WHERE usuario_id = ? AND ideia_id = ?",
       [usuario_id, ideia_id]
     );
 
     if (existente.length > 0) {
-      const votoAtual = existente[0].tipo_voto;
-      if (votoAtual === tipo) {
-        // Clicou no mesmo botão -> Remove o voto
+      if (existente[0].tipo_voto === tipo) {
         await pool.query("DELETE FROM votos_ideias WHERE id = ?", [existente[0].id]);
       } else {
-        // Clicou no botão diferente -> Alterna o voto
         await pool.query("UPDATE votos_ideias SET tipo_voto = ? WHERE id = ?", [tipo, existente[0].id]);
       }
     } else {
-      // Registrar novo voto
       await pool.query(
         "INSERT INTO votos_ideias (usuario_id, ideia_id, tipo_voto) VALUES (?, ?, ?)",
         [usuario_id, ideia_id, tipo]
       );
     }
 
-    // Calcular contagens totais e recuperar o voto atual do perfil
     const [contagem] = await pool.query(`
       SELECT 
         SUM(CASE WHEN tipo_voto = 'like' THEN 1 ELSE 0 END) AS likes,
@@ -394,12 +400,53 @@ app.put("/ideias/:id/votar", autenticarToken, async (req, res) => {
       meu_voto: votoPerfil.length > 0 ? votoPerfil[0].tipo_voto : null
     });
   } catch (err) {
-    console.error("Erro ao registrar voto na ideia:", err);
+    console.error("Erro ao votar:", err);
     res.status(500).json({ error: "Erro interno ao registrar voto" });
   }
 });
 
-// ROTA: Salvar personalização do CoNexo Builder
+// --- ROTAS DE CHAT / MENSAGENS ---
+app.post("/mensagens", autenticarToken, async (req, res) => {
+  const { projeto_id, destinatario_id, mensagem } = req.body;
+  const remetente_id = req.usuario.id;
+
+  if (!projeto_id || !destinatario_id || !mensagem || mensagem.trim() === "") {
+    return res.status(400).json({ error: "Dados incompletos para envio da mensagem." });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO mensagens (projeto_id, remetente_id, destinatario_id, mensagem) VALUES (?, ?, ?, ?)`,
+      [projeto_id, remetente_id, destinatario_id, mensagem.trim()]
+    );
+    res.status(201).json({ message: "Mensagem enviada com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao enviar mensagem:", err);
+    res.status(500).json({ error: "Erro interno ao enviar mensagem." });
+  }
+});
+
+app.get("/mensagens/:projeto_id", autenticarToken, async (req, res) => {
+  const { projeto_id } = req.params;
+  try {
+    const [mensagens] = await pool.query(`
+      SELECT 
+        m.*, 
+        u.nome AS remetente_nome 
+      FROM mensagens m
+      JOIN usuarios u ON m.remetente_id = u.id
+      WHERE m.projeto_id = ?
+      ORDER BY m.data_envio ASC
+    `, [projeto_id]);
+
+    res.json(mensagens);
+  } catch (err) {
+    console.error("Erro ao buscar mensagens:", err);
+    res.status(500).json({ error: "Erro interno ao buscar mensagens." });
+  }
+});
+
+// SALVAR LOJA (Builder)
 app.post("/lojas", async (req, res) => {
   const { nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo, cor_primaria, cor_secundaria, cor_terciaria } = req.body;
   try {
@@ -421,7 +468,7 @@ app.post("/lojas", async (req, res) => {
     res.json({ message: "Configuração da loja salva com sucesso!" });
   } catch (err) {
     console.error("Erro ao salvar loja:", err);
-    res.status(500).json({ error: "Erro interno do servidor ao salvar loja" });
+    res.status(500).json({ error: "Erro interno ao salvar loja" });
   }
 });
 
@@ -438,7 +485,6 @@ app.get("/projetos", async (req, res) => {
 
 app.get("/ideias", async (req, res) => {
   try {
-    // Retorna a lista de ideias aprovadas com a contagem total de likes e dislikes
     const [rows] = await pool.query(`
       SELECT 
         i.*,
