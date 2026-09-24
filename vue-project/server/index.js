@@ -5,7 +5,7 @@ require('dotenv').config();
 
 const app = express();
 
-// Aumento do limite de payload para aceitar imagens em Base64 comprimidas (50MB)
+// Aumento do limite de payload para aceitar imagens em Base64 (50MB)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
@@ -28,18 +28,17 @@ async function inicializarBanco() {
     console.log("✅ Tabela 'projetos' verificada: coluna 'imagem_url' ajustada para LONGTEXT com sucesso.");
     connection.release();
   } catch (err) {
-    console.error("⚠️ Aviso na inicialização da tabela (pode já estar ajustada):", err.message);
+    console.error("⚠️ Aviso na inicialização da tabela:", err.message);
   }
 }
 
-// Rota de Cadastro de Projetos (com suporte a imagem Base64 e tratamento de erros)
+// Rota de Cadastro de Projetos
 app.post("/projetos", async (req, res) => {
   const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, email, telefone, imagem_url } = req.body;
 
   try {
     const statusInicial = 'pendente';
-
-    console.log(`[Projeto] A cadastrar projeto para a empresa: "${empresa}" | Tamanho da imagem recebida: ${imagem_url ? imagem_url.length : 0} caracteres`);
+    console.log(`[Projeto] A cadastrar projeto: "${empresa}" | Imagem size: ${imagem_url ? imagem_url.length : 0}`);
 
     await pool.query(
       `INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, imagem_url, status) 
@@ -62,12 +61,83 @@ app.post("/projetos", async (req, res) => {
 
     res.json({ message: "Projeto enviado para análise com sucesso!" });
   } catch (err) {
-    console.error("❌ Erro detalhado ao cadastrar projeto no banco de dados:", err);
+    console.error("❌ Erro ao cadastrar projeto:", err);
     res.status(500).json({ error: "Erro interno ao cadastrar projeto", details: err.message });
   }
 });
 
-// Outras rotas do seu sistema (Admin pendentes, aprovação, etc.) continuam aqui...
+// Rota para buscar itens pendentes para o painel administrativo
+app.get("/admin/pendentes", async (req, res) => {
+  try {
+    const [projetos] = await pool.query("SELECT *, 'projeto' as tipo_item FROM projetos WHERE status = 'pendente'");
+    const [ideias] = await pool.query("SELECT *, 'ideia' as tipo_item FROM ideias WHERE status = 'pendente'");
+    res.json([...projetos, ...ideias]);
+  } catch (err) {
+    console.error("Erro ao carregar pendentes:", err);
+    res.status(500).json({ error: "Erro ao carregar dados pendentes" });
+  }
+});
+
+// Rota para buscar lojas cadastradas
+app.get("/admin/lojas", async (req, res) => {
+  try {
+    const [lojas] = await pool.query("SELECT * FROM lojas");
+    res.json(lojas);
+  } catch (err) {
+    console.error("Erro ao carregar lojas:", err);
+    res.status(500).json({ error: "Erro ao carregar lojas" });
+  }
+});
+
+// Rota para aprovar projetos ou ideias
+app.put("/admin/aprovar/:id", async (req, res) => {
+  const { id } = req.params;
+  const { tipo } = req.body;
+  const tabela = tipo === 'ideia' ? 'ideias' : 'projetos';
+  try {
+    await pool.query(`UPDATE ${tabela} SET status = 'aprovado' WHERE id = ?`, [id]);
+    res.json({ message: "Item aprovado com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao aprovar item:", err);
+    res.status(500).json({ error: "Erro ao aprovar item" });
+  }
+});
+
+// Rota para excluir projetos
+app.delete("/projetos/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query("DELETE FROM projetos WHERE id = ?", [id]);
+    res.json({ message: "Projeto excluído com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao excluir projeto:", err);
+    res.status(500).json({ error: "Erro ao excluir projeto" });
+  }
+});
+
+// Rota para excluir ideias
+app.delete("/ideias/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query("DELETE FROM ideias WHERE id = ?", [id]);
+    res.json({ message: "Ideia excluída com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao excluir ideia:", err);
+    res.status(500).json({ error: "Erro ao excluir ideia" });
+  }
+});
+
+// Rota para excluir lojas
+app.delete("/admin/lojas/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query("DELETE FROM lojas WHERE id = ?", [id]);
+    res.json({ message: "Loja excluída com sucesso!" });
+  } catch (err) {
+    console.error("Erro ao excluir loja:", err);
+    res.status(500).json({ error: "Erro ao excluir loja" });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
