@@ -319,6 +319,7 @@ const enviarNovaMensagem = async () => {
   const me = props.usuario?.id ? Number(props.usuario.id) : 0;
   const ehDono = me > 0 && conv.dono_id > 0 && me === conv.dono_id;
   const destinatarioId = ehDono ? (conv.investidor_id || 0) : (conv.dono_id || 0);
+  const destinatarioNome = ehDono ? (conv.investidor_nome || '') : '';
 
   try {
     const token = localStorage.getItem('token');
@@ -327,6 +328,7 @@ const enviarNovaMensagem = async () => {
     await axios.post(`${API_URL}/mensagens`, {
       projeto_id: conv.projeto_id,
       destinatario_id: destinatarioId,
+      destinatario: destinatarioNome,
       remetente: nomeUsuario,
       mensagem: texto
     }, { headers });

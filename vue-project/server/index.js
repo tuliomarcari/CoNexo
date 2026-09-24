@@ -492,7 +492,7 @@ app.put("/ideias/:id/votar", autenticarToken, async (req, res) => {
 
 // CHAT / MENSAGENS HANDLERS
 const enviarMensagemHandler = async (req, res) => {
-  const { projeto_id, destinatario_id, usuario_id, remetente, mensagem } = req.body;
+  const { projeto_id, destinatario_id, destinatario, usuario_id, remetente, mensagem } = req.body;
   const textoMensagem = mensagem ? String(mensagem).trim() : '';
 
   if (!projeto_id || !textoMensagem) {
@@ -506,6 +506,7 @@ const enviarMensagemHandler = async (req, res) => {
 
   const idRemetente = req.usuario?.id || usuario_id || 0;
   const idDestinatario = parseInt(destinatario_id, 10) || 0;
+  const nomeDestinatario = (destinatario || '').trim();
   const nomeRemetente = req.usuario?.nome || remetente || 'Usuário';
 
   console.log(`[Chat 1-para-1] Mensagem para projeto #${projId}: "${textoMensagem.substring(0, 30)}"`);
@@ -528,20 +529,21 @@ const enviarMensagemHandler = async (req, res) => {
   try { await pool.query(`ALTER TABLE mensagens ADD COLUMN remetente VARCHAR(255)`); } catch (e) {}
   try { await pool.query(`ALTER TABLE mensagens ADD COLUMN remetente_id INT DEFAULT 0`); } catch (e) {}
   try { await pool.query(`ALTER TABLE mensagens ADD COLUMN destinatario_id INT DEFAULT 0`); } catch (e) {}
+  try { await pool.query(`ALTER TABLE mensagens ADD COLUMN destinatario VARCHAR(255)`); } catch (e) {}
   try { await pool.query(`ALTER TABLE mensagens ADD COLUMN usuario_id INT DEFAULT 0`); } catch (e) {}
 
   try {
     await pool.query(
-      "INSERT INTO mensagens (projeto_id, remetente, mensagem, remetente_id, usuario_id, destinatario_id) VALUES (?, ?, ?, ?, ?, ?)",
-      [projId, nomeRemetente, textoMensagem, idRemetente, idRemetente, idDestinatario]
+      "INSERT INTO mensagens (projeto_id, remetente, mensagem, remetente_id, usuario_id, destinatario_id, destinatario) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [projId, nomeRemetente, textoMensagem, idRemetente, idRemetente, idDestinatario, nomeDestinatario]
     );
     console.log(`✅ Mensagem 1-para-1 salva no projeto #${projId}`);
     return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
   } catch (err1) {
     try {
       await pool.query(
-        "INSERT INTO mensagens (projeto_id, remetente, mensagem, remetente_id) VALUES (?, ?, ?, ?)",
-        [projId, nomeRemetente, textoMensagem, idRemetente]
+        "INSERT INTO mensagens (projeto_id, remetente, mensagem, remetente_id, destinatario_id) VALUES (?, ?, ?, ?, ?)",
+        [projId, nomeRemetente, textoMensagem, idRemetente, idDestinatario]
       );
       return res.status(201).json({ message: "Mensagem enviada com sucesso!" });
     } catch (err2) {
@@ -572,7 +574,7 @@ const buscarMensagensHandler = async (req, res) => {
 
   // Parâmetros do investidor/interlocutor para filtrar a conversa 1-para-1
   const queryInvestidorId = parseInt(req.query.investidor_id || req.query.interlocutor_id, 10) || 0;
-  const queryInvestidorNome = (req.query.investidor_nome || req.query.interlocutor_nome || '').trim();
+  const queryInvestidorNome = (req.query.investidor_nome || req.query.interlocutor_nome || '').trim().toLowerCase();
 
   try {
     // 1. Obter dono do projeto
@@ -582,7 +584,7 @@ const buscarMensagensHandler = async (req, res) => {
 
     const ehDono = userId > 0 && donoId > 0 && userId === donoId;
 
-    // 2. Buscar mensagens do projeto
+    // 2. Buscar todas as mensagens do projeto
     const [todasMensagens] = await pool.query(`
       SELECT 
         m.id,
@@ -591,6 +593,7 @@ const buscarMensagensHandler = async (req, res) => {
         COALESCE(m.remetente, '') AS remetente,
         COALESCE(m.remetente_id, m.usuario_id, 0) AS remetente_id,
         COALESCE(m.destinatario_id, 0) AS destinatario_id,
+        COALESCE(m.destinatario, '') AS destinatario,
         COALESCE(m.usuario_id, 0) AS usuario_id,
         COALESCE(m.mensagem, m.conteudo, m.texto, '') AS mensagem,
         COALESCE(m.created_at, m.data_envio, CURRENT_TIMESTAMP) AS data_envio
@@ -600,27 +603,32 @@ const buscarMensagensHandler = async (req, res) => {
       ORDER BY m.id ASC
     `, [projId]);
 
-    // 3. Filtrar isolando estritamente a conversa 1-para-1 entre o investidor e o dono
+    // 3. Filtrar isolando estritamente a conversa 1-para-1 entre a dupla (investidor e dono)
     const mensagensFiltradas = todasMensagens.filter(m => {
       const remId = Number(m.remetente_id || m.usuario_id || 0);
       const destId = Number(m.destinatario_id || 0);
-      const remNome = (m.remetente_nome || m.remetente || '').trim();
+      const remNome = (m.remetente_nome || m.remetente || '').trim().toLowerCase();
+      const destNome = (m.destinatario || '').trim().toLowerCase();
 
-      // Se o usuário logado for INVESTIDOR (não é o dono do projeto)
+      // Caso 1: O usuário logado é INVESTIDOR (não é o dono do projeto)
       if (!ehDono && !isAdmin) {
-        // Exibe APENAS mensagens onde o usuário logado participou
-        const ehRem = (userId > 0 && remId === userId) || (userNome && remNome.toLowerCase() === userNome.toLowerCase());
-        const ehDest = (userId > 0 && destId === userId);
+        const ehRem = (userId > 0 && remId === userId) || (userNome && remNome === userNome.toLowerCase());
+        const ehDest = (userId > 0 && destId === userId) || (userNome && destNome === userNome.toLowerCase());
         return ehRem || ehDest;
       }
 
-      // Se o usuário logado for o DONO do projeto (ou Admin)
-      // Se um investidor específico foi informado na requisição, traz só a conversa desse investidor
+      // Caso 2: O usuário logado é o DONO DO PROJETO (ou Admin)
+      // Se um investidor/interlocutor específico foi selecionado na sidebar:
       if (queryInvestidorId > 0) {
-        return (remId === queryInvestidorId || destId === queryInvestidorId);
+        const ehEnviadaPeloInvestidor = (remId === queryInvestidorId);
+        const ehEnviadaParaOInvestidor = (destId === queryInvestidorId);
+        if (ehEnviadaPeloInvestidor || ehEnviadaParaOInvestidor) return true;
       }
+
       if (queryInvestidorNome) {
-        return (remNome.toLowerCase() === queryInvestidorNome.toLowerCase() || destId > 0);
+        const ehEnviadaPeloInvestidor = (remNome === queryInvestidorNome) || (queryInvestidorId > 0 && remId === queryInvestidorId);
+        const ehEnviadaParaOInvestidor = (destNome === queryInvestidorNome) || (queryInvestidorId > 0 && destId === queryInvestidorId);
+        return ehEnviadaPeloInvestidor || ehEnviadaParaOInvestidor;
       }
 
       return true;
