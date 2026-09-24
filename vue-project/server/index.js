@@ -159,7 +159,7 @@ const pool = mysql.createPool({
 // Inicialização das tabelas com correção automática de colunas
 const inicializarBanco = async () => {
   try {
-    // 1. Criação das tabelas (se não existirem)
+    // 1. Criação das tabelas
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY, 
@@ -198,7 +198,7 @@ const inicializarBanco = async () => {
       )
     `);
 
-    // NOVA TABELA: Suporte ao CoNexo Builder / Criar Loja
+    // TABELA: CoNexo Builder / Criar Loja
     await pool.query(`
       CREATE TABLE IF NOT EXISTS lojas (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -207,24 +207,32 @@ const inicializarBanco = async () => {
         banner_estilo VARCHAR(50),
         vitrine_estilo VARCHAR(50),
         rodape_estilo VARCHAR(50),
+        cor_primaria VARCHAR(20) DEFAULT '#10b981',
+        cor_secundaria VARCHAR(20) DEFAULT '#0f172a',
         data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // 2. MIGRAÇÃO: Força a criação da coluna 'status' se a tabela já existia sem ela
+    // 2. MIGRAÇÕES AUTOMÁTICAS (Caso as tabelas já existissem sem novas colunas)
     try {
       await pool.query("ALTER TABLE projetos ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'");
       console.log("🆕 Coluna status adicionada em projetos!");
-    } catch (e) {
-      // Ignora erro se a coluna já existir
-    }
+    } catch (e) { }
 
     try {
       await pool.query("ALTER TABLE ideias ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'");
       console.log("🆕 Coluna status adicionada em ideias!");
-    } catch (e) {
-      // Ignora erro se a coluna já existir
-    }
+    } catch (e) { }
+
+    try {
+      await pool.query("ALTER TABLE lojas ADD COLUMN cor_primaria VARCHAR(20) DEFAULT '#10b981'");
+      console.log("🆕 Coluna cor_primaria adicionada em lojas!");
+    } catch (e) { }
+
+    try {
+      await pool.query("ALTER TABLE lojas ADD COLUMN cor_secundaria VARCHAR(20) DEFAULT '#0f172a'");
+      console.log("🆕 Coluna cor_secundaria adicionada em lojas!");
+    } catch (e) { }
 
     console.log("✅ Banco de dados pronto e atualizado!");
   } catch (err) {
@@ -303,14 +311,22 @@ app.post("/ideias", async (req, res) => {
   }
 });
 
-// NOVA ROTA: Salvar personalização do CoNexo Builder
+// ROTA: Salvar personalização do CoNexo Builder
 app.post("/lojas", async (req, res) => {
-  const { nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo } = req.body;
+  const { nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo, cor_primaria, cor_secundaria } = req.body;
   try {
     await pool.query(
-      `INSERT INTO lojas (nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [nome_loja || 'Minha Loja CoNexo', usuario_id || null, banner_estilo, vitrine_estilo, rodape_estilo]
+      `INSERT INTO lojas (nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo, cor_primaria, cor_secundaria) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        nome_loja || 'Minha Loja CoNexo',
+        usuario_id || null,
+        banner_estilo,
+        vitrine_estilo,
+        rodape_estilo,
+        cor_primaria || '#10b981',
+        cor_secundaria || '#0f172a'
+      ]
     );
 
     res.json({ message: "Configuração da loja salva com sucesso!" });
@@ -320,7 +336,7 @@ app.post("/lojas", async (req, res) => {
   }
 });
 
-// --- ROTAS PÚBLICAS (Filtra apenas aprovados para a Home) ---
+// --- ROTAS PÚBLICAS ---
 app.get("/projetos", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM projetos WHERE status = 'aprovado' ORDER BY id DESC");

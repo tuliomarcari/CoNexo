@@ -14,7 +14,9 @@ const configLoja = reactive({
   nome_loja: '',
   banner: 'estatico',
   vitrine: 'grid',
-  rodape: 'compacto'
+  rodape: 'compacto',
+  cor_primaria: '#10b981',
+  cor_secundaria: '#0f172a'
 });
 
 const salvandoLoja = ref(false);
@@ -27,7 +29,9 @@ const salvarConfiguracaoLoja = async () => {
       usuario_id: props.user?.id || null,
       banner_estilo: configLoja.banner,
       vitrine_estilo: configLoja.vitrine,
-      rodape_estilo: configLoja.rodape
+      rodape_estilo: configLoja.rodape,
+      cor_primaria: configLoja.cor_primaria,
+      cor_secundaria: configLoja.cor_secundaria
     };
 
     await axios.post(`${API_URL}/lojas`, payload);
@@ -45,11 +49,11 @@ const salvarConfiguracaoLoja = async () => {
   <section class="builder-view">
     <div class="builder-header">
       <h2>CoNexo Builder</h2>
-      <p>Personalize a vitrine virtual da sua loja selecionando os blocos abaixo.</p>
+      <p>Personalize a vitrine virtual da sua loja selecionando os blocos e cores abaixo.</p>
     </div>
 
     <div class="builder-grid">
-      <!-- ESQUERDA: OPÇÕES DE SELEÇÃO -->
+      <!-- ESQUERDA: CONTROLES DE SELEÇÃO -->
       <div class="builder-controls">
         <div class="control-box">
           <label class="control-label">Nome da sua Loja</label>
@@ -59,6 +63,28 @@ const salvarConfiguracaoLoja = async () => {
             placeholder="Ex: Minha Boutique" 
             class="builder-input"
           />
+        </div>
+
+        <!-- NOVO BLOCO: CORES DA LOJA -->
+        <div class="control-box">
+          <h3>4. Cores da Identidade</h3>
+          <div class="color-picker-group">
+            <label class="color-picker-item">
+              <span>Cor Primária (Destaques/Botões)</span>
+              <div class="color-input-wrapper">
+                <input type="color" v-model="configLoja.cor_primaria" class="color-input" />
+                <code>{{ configLoja.cor_primaria }}</code>
+              </div>
+            </label>
+
+            <label class="color-picker-item">
+              <span>Cor Secundária (Cabeçalho/Rodapé)</span>
+              <div class="color-input-wrapper">
+                <input type="color" v-model="configLoja.cor_secundaria" class="color-input" />
+                <code>{{ configLoja.cor_secundaria }}</code>
+              </div>
+            </label>
+          </div>
         </div>
 
         <div class="control-box">
@@ -105,7 +131,6 @@ const salvarConfiguracaoLoja = async () => {
           {{ salvandoLoja ? 'Salvando...' : 'Salvar Minha Loja' }}
         </button>
 
-        <!-- BLOCO DE ATENDIMENTO/CONTATO -->
         <div class="custom-support-box">
           <h4>Quer um site totalmente sob medida?</h4>
           <p>Fale diretamente com os desenvolvedores da CoNexo.</p>
@@ -115,14 +140,17 @@ const salvarConfiguracaoLoja = async () => {
         </div>
       </div>
 
-      <!-- DIREITA: PREVIEW AO VIVO -->
+      <!-- DIREITA: PREVIEW AO VIVO DINÂMICO COM CORES -->
       <div class="builder-preview">
         <div class="preview-badge">Preview Ao Vivo</div>
         
         <div class="store-canvas">
-          <!-- DUMMY BANNER -->
-          <div :class="['store-banner', configLoja.banner]">
-            <h1>{{ configLoja.nome_loja || 'Nome da Sua Loja' }}</h1>
+          <!-- DUMMY BANNER DYNAMIC COLORS -->
+          <div 
+            :class="['store-banner', configLoja.banner]"
+            :style="{ backgroundColor: configLoja.cor_secundaria, color: '#ffffff' }"
+          >
+            <h1 :style="{ color: configLoja.cor_primaria }">{{ configLoja.nome_loja || 'Nome da Sua Loja' }}</h1>
             <p v-if="configLoja.banner === 'estatico'">Bem-vindo à nossa loja virtual oficial!</p>
             <p v-else>‹ Slide 1 de 3: Lançamentos e Ofertas ›</p>
           </div>
@@ -134,30 +162,33 @@ const salvarConfiguracaoLoja = async () => {
               <div class="product-item" v-for="i in 3" :key="i">
                 <div class="img-ph"></div>
                 <p>Produto {{ i }}</p>
-                <strong>R$ 99,90</strong>
+                <strong :style="{ color: configLoja.cor_primaria }">R$ 99,90</strong>
               </div>
             </div>
             <div v-else class="featured-products">
               <div class="product-item feat-main">
                 <div class="img-ph lg"></div>
                 <p>Destaque Principal</p>
-                <strong>R$ 199,90</strong>
+                <strong :style="{ color: configLoja.cor_primaria }">R$ 199,90</strong>
               </div>
               <div class="feat-side">
                 <div class="product-item" v-for="i in 2" :key="i">
                   <p>Item {{ i }}</p>
-                  <strong>R$ 49,90</strong>
+                  <strong :style="{ color: configLoja.cor_primaria }">R$ 49,90</strong>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- DUMMY RODAPÉ -->
-          <div :class="['store-footer', configLoja.rodape]">
+          <!-- DUMMY RODAPÉ DYNAMIC COLORS -->
+          <div 
+            :class="['store-footer', configLoja.rodape]"
+            :style="{ backgroundColor: configLoja.cor_secundaria }"
+          >
             <p v-if="configLoja.rodape === 'compacto'">© 2026 {{ configLoja.nome_loja || 'Sua Loja' }} — Todos os direitos reservados.</p>
             <div v-else class="footer-wa">
               <p>© 2026 {{ configLoja.nome_loja || 'Sua Loja' }}</p>
-              <span class="wa-btn">💬 Suporte via WhatsApp</span>
+              <span class="wa-btn" :style="{ backgroundColor: configLoja.cor_primaria }">💬 Suporte via WhatsApp</span>
             </div>
           </div>
         </div>
@@ -224,6 +255,49 @@ const salvarConfiguracaoLoja = async () => {
   border: 1px solid var(--cx-dark-border);
   background: #0f172a;
   color: #ffffff;
+}
+
+.color-picker-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.color-picker-item span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--cx-text-faint);
+  margin-bottom: 4px;
+}
+
+.color-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.color-input {
+  -webkit-appearance: none;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-input::-webkit-color-swatch {
+  border: 1px solid var(--cx-dark-border);
+  border-radius: 6px;
+}
+
+.color-input-wrapper code {
+  font-size: 0.85rem;
+  color: #e2e8f0;
 }
 
 .radio-card {
@@ -311,16 +385,13 @@ const salvarConfiguracaoLoja = async () => {
 .store-banner {
   padding: 40px 20px;
   text-align: center;
-  background: #f1f5f9;
-}
-
-.store-banner.carrossel {
-  background: #e2e8f0;
+  transition: background-color 0.3s ease;
 }
 
 .store-banner h1 {
   font-size: 1.6rem;
   margin-bottom: 8px;
+  transition: color 0.3s ease;
 }
 
 .store-body {
@@ -374,11 +445,11 @@ const salvarConfiguracaoLoja = async () => {
 }
 
 .store-footer {
-  background: #0f172a;
   color: #ffffff;
   padding: 16px 20px;
   font-size: 0.85rem;
   text-align: center;
+  transition: background-color 0.3s ease;
 }
 
 .footer-wa {
@@ -388,12 +459,12 @@ const salvarConfiguracaoLoja = async () => {
 }
 
 .wa-btn {
-  background: #25d366;
   color: #ffffff;
   padding: 4px 10px;
   border-radius: 4px;
   font-size: 0.8rem;
   font-weight: 600;
+  transition: background-color 0.3s ease;
 }
 
 @media (max-width: 768px) {
