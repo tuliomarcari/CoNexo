@@ -191,6 +191,19 @@ async function inicializarBanco() {
       `);
     } catch (e) {}
 
+    // Tabela Votos Projetos
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS votos_projetos (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          usuario_id INT NOT NULL,
+          projeto_id INT NOT NULL,
+          tipo_voto VARCHAR(10) NOT NULL,
+          UNIQUE KEY uq_usuario_projeto (usuario_id, projeto_id)
+        )
+      `);
+    } catch (e) {}
+
     // Tabela Mensagens / Chat (Estrutura Exata com Colunas Garantidas)
     try {
       await connection.query(`
@@ -333,13 +346,30 @@ app.post("/login", async (req, res) => {
 });
 
 // LISTAGEM PÚBLICA DE PROJETOS APROVADOS
-app.get("/projetos", async (req, res) => {
+app.get("/projetos", autenticarToken, async (req, res) => {
+  const usuario_id = req.usuario?.id || 0;
   try {
-    const [rows] = await pool.query("SELECT * FROM projetos WHERE status = 'aprovado' OR status IS NULL OR status = '' ORDER BY id DESC");
+    const [rows] = await pool.query(`
+      SELECT 
+        p.*,
+        COALESCE(SUM(CASE WHEN v.tipo_voto = 'like' THEN 1 ELSE 0 END), 0) AS likes,
+        COALESCE(SUM(CASE WHEN v.tipo_voto = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes,
+        MAX(CASE WHEN v.usuario_id = ? THEN v.tipo_voto ELSE NULL END) AS meu_voto
+      FROM projetos p
+      LEFT JOIN votos_projetos v ON p.id = v.projeto_id
+      WHERE p.status = 'aprovado' OR p.status IS NULL OR p.status = ''
+      GROUP BY p.id
+      ORDER BY p.id DESC
+    `, [usuario_id]);
     res.json(rows);
   } catch (err) {
     console.error("Erro ao listar projetos:", err);
-    res.status(500).json({ error: "Erro interno ao listar projetos" });
+    try {
+      const [rowsSimples] = await pool.query("SELECT * FROM projetos WHERE status = 'aprovado' OR status IS NULL OR status = '' ORDER BY id DESC");
+      res.json(rowsSimples);
+    } catch (e) {
+      res.status(500).json({ error: "Erro interno ao listar projetos" });
+    }
   }
 });
 
@@ -386,20 +416,82 @@ app.post("/projetos", async (req, res) => {
   }
 });
 
+// VOTAÇÃO EM PROJETOS
+const votarProjetoHandler = async (req, res) => {
+  const projeto_id = req.params.id;
+  const usuario_id = req.usuario?.id;
+  const { tipo } = req.body;
+
+  if (!usuario_id) {
+    return res.status(401).json({ error: "Você precisa estar conectado para votar." });
+  }
+
+  if (tipo !== 'like' && tipo !== 'dislike') {
+    return res.status(400).json({ error: "Tipo de voto inválido." });
+  }
+
+  try {
+    const [existente] = await pool.query(
+      "SELECT id, tipo_voto FROM votos_projetos WHERE usuario_id = ? AND projeto_id = ?",
+      [usuario_id, projeto_id]
+    );
+
+    if (existente.length > 0) {
+      if (existente[0].tipo_voto === tipo) {
+        await pool.query("DELETE FROM votos_projetos WHERE id = ?", [existente[0].id]);
+      } else {
+        await pool.query("UPDATE votos_projetos SET tipo_voto = ? WHERE id = ?", [tipo, existente[0].id]);
+      }
+    } else {
+      await pool.query(
+        "INSERT INTO votos_projetos (usuario_id, projeto_id, tipo_voto) VALUES (?, ?, ?)",
+        [usuario_id, projeto_id, tipo]
+      );
+    }
+
+    const [contagem] = await pool.query(`
+      SELECT 
+        SUM(CASE WHEN tipo_voto = 'like' THEN 1 ELSE 0 END) AS likes,
+        SUM(CASE WHEN tipo_voto = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+      FROM votos_projetos 
+      WHERE projeto_id = ?
+    `, [projeto_id]);
+
+    const [votoPerfil] = await pool.query(
+      "SELECT tipo_voto FROM votos_projetos WHERE usuario_id = ? AND projeto_id = ?",
+      [usuario_id, projeto_id]
+    );
+
+    res.json({
+      likes: Number(contagem[0]?.likes || 0),
+      dislikes: Number(contagem[0]?.dislikes || 0),
+      meu_voto: votoPerfil.length > 0 ? votoPerfil[0].tipo_voto : null
+    });
+  } catch (err) {
+    console.error("Erro ao registrar voto no projeto:", err);
+    res.status(500).json({ error: "Erro interno ao registrar voto" });
+  }
+};
+
+app.put("/projetos/:id/votar", autenticarToken, votarProjetoHandler);
+app.post("/projetos/:id/votar", autenticarToken, votarProjetoHandler);
+
 // LISTAGEM PÚBLICA DE IDEIAS APROVADAS
-app.get("/ideias", async (req, res) => {
+app.get("/ideias", autenticarToken, async (req, res) => {
+  const usuario_id = req.usuario?.id || 0;
   try {
     const [rows] = await pool.query(`
       SELECT 
         i.*,
         COALESCE(SUM(CASE WHEN v.tipo_voto = 'like' THEN 1 ELSE 0 END), 0) AS likes,
-        COALESCE(SUM(CASE WHEN v.tipo_voto = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes
+        COALESCE(SUM(CASE WHEN v.tipo_voto = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes,
+        MAX(CASE WHEN v.usuario_id = ? THEN v.tipo_voto ELSE NULL END) AS meu_voto
       FROM ideias i
       LEFT JOIN votos_ideias v ON i.id = v.ideia_id
       WHERE i.status = 'aprovado' OR i.status IS NULL OR i.status = ''
       GROUP BY i.id
       ORDER BY i.id DESC
-    `);
+    `, [usuario_id]);
     res.json(rows);
   } catch (err) {
     console.error("Erro ao listar ideias com votos, tentando fallback simples:", err.message);

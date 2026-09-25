@@ -31,9 +31,12 @@ const abrirCentralConversas = (projeto = null) => {
 
 const carregarDados = async () => {
   try {
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
     const [resP, resI] = await Promise.allSettled([
-      axios.get(`${API_URL}/projetos`),
-      axios.get(`${API_URL}/ideias`)
+      axios.get(`${API_URL}/projetos`, { headers }),
+      axios.get(`${API_URL}/ideias`, { headers })
     ]);
 
     if (resP.status === 'fulfilled') {
@@ -248,6 +251,7 @@ onMounted(() => {
       <Home
         v-if="paginaAtual === 'home'"
         :projetos="listaProjetos"
+        :user="usuarioLogado"
         @navegar="navegar"
       />
       <Login

@@ -197,6 +197,35 @@
                 </div>
 
                 <div class="project-item__actions">
+                  <!-- BOTÕES DE LIKE E DISLIKE -->
+                  <div class="vote-group">
+                    <button 
+                      type="button"
+                      class="vote-btn vote-btn--like"
+                      :class="{ 'vote-btn--active-like': p.meu_voto === 'like' }"
+                      @click="votar(p, 'like')"
+                      title="Achei um bom projeto"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                      </svg>
+                      <span>{{ p.likes || 0 }}</span>
+                    </button>
+
+                    <button 
+                      type="button"
+                      class="vote-btn vote-btn--dislike"
+                      :class="{ 'vote-btn--active-dislike': p.meu_voto === 'dislike' }"
+                      @click="votar(p, 'dislike')"
+                      title="Não achei um bom projeto"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/>
+                      </svg>
+                      <span>{{ p.dislikes || 0 }}</span>
+                    </button>
+                  </div>
+
                   <button class="cx-btn-action" @click="abrirChat(p)">💬 Negociar / Chat</button>
                   <button
                     v-if="user?.nivel === 'admin'"
@@ -456,6 +485,32 @@ const enviarProjeto = () => {
   alert("Projeto enviado com sucesso! Ele aparecerá na lista assim que o administrador aprová-lo.");
 };
 
+const votar = async (item, tipo) => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert("Você precisa estar conectado para votar nos projetos.");
+    return;
+  }
+
+  try {
+    const res = await axios.put(
+      `${API_URL}/projetos/${item.id}/votar`,
+      { tipo },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    item.likes = res.data.likes;
+    item.dislikes = res.data.dislikes;
+    item.meu_voto = res.data.meu_voto;
+  } catch (err) {
+    console.error("Erro ao votar no projeto:", err);
+    if (err.response?.status === 401) {
+      alert("Sua sessão expirou. Faça login novamente para votar.");
+    } else {
+      alert("Erro ao registrar seu voto. Tente novamente.");
+    }
+  }
+};
+
 // Funções de Chat
 const ehMensagemMinha = (m) => {
   if (!m) return false;
@@ -592,7 +647,12 @@ const fecharChat = () => {
 .project-item__fin-item span { font-size: var(--cx-text-xs); text-transform: uppercase; color: var(--cx-text-muted); font-weight: 600; display: block; }
 .project-item__fin-item strong { font-size: var(--cx-text-xl); font-weight: 800; color: var(--cx-text); }
 .project-item__fin-divider { width: 1px; height: 28px; background: var(--cx-border-soft); }
-.project-item__actions { display: flex; gap: var(--cx-space-3); }
+.project-item__actions { display: flex; align-items: center; gap: var(--cx-space-3); flex-wrap: wrap; }
+.vote-group { display: flex; align-items: center; gap: var(--cx-space-2); }
+.vote-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: var(--cx-radius-md); font-size: var(--cx-text-xs); font-weight: 600; font-family: var(--cx-font-sans); border: 1px solid var(--cx-border); background: var(--cx-bg); color: var(--cx-text-2); cursor: pointer; transition: border-color var(--cx-transition-fast), color var(--cx-transition-fast), background var(--cx-transition-fast); }
+.vote-btn svg { flex-shrink: 0; }
+.vote-btn--like:hover, .vote-btn--active-like { border-color: var(--cx-primary); color: var(--cx-primary-dark); background: var(--cx-primary-light); }
+.vote-btn--dislike:hover, .vote-btn--active-dislike { border-color: #fecaca; color: #b91c1c; background: #fef2f2; }
 .cx-btn-action { padding: 7px 16px; border-radius: var(--cx-radius-md); font-size: var(--cx-text-sm); font-weight: 600; cursor: pointer; border: 1px solid var(--cx-border); color: var(--cx-text-2); background: transparent; }
 .cx-btn-action:hover { border-color: var(--cx-primary); color: var(--cx-primary); background: var(--cx-primary-alpha); }
 .cx-btn-action--danger { color: #b91c1c; border-color: #fecaca; }

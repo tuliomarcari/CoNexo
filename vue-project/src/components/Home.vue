@@ -103,7 +103,7 @@
         </div>
 
         <div class="projects__grid" v-else>
-          <article class="project-card" v-for="(p, i) in projetos" :key="i">
+          <article class="project-card" v-for="p in projetosEmDestaque" :key="p.id">
             <!-- Imagem do Projeto / Logótipo com Fallback -->
             <div class="project-card__img-container" :class="{ 'project-card__img-container--placeholder': !(p.imagem_url || p.foto_url || p.imagem) }">
               <img 
@@ -139,9 +139,41 @@
                   <strong class="project-card__meta-value">{{ p.porcentagem }}%</strong>
                 </div>
               </div>
-              <button class="project-card__cta" @click="$emit('navegar', 'publicar')">
-                Ver detalhes
-              </button>
+
+              <div class="project-card__actions">
+                <!-- BOTÕES DE LIKE E DISLIKE -->
+                <div class="vote-group">
+                  <button 
+                    type="button"
+                    class="vote-btn vote-btn--like"
+                    :class="{ 'vote-btn--active-like': p.meu_voto === 'like' }"
+                    @click.stop="votar(p, 'like')"
+                    title="Achei um bom projeto"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                    </svg>
+                    <span>{{ p.likes || 0 }}</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    class="vote-btn vote-btn--dislike"
+                    :class="{ 'vote-btn--active-dislike': p.meu_voto === 'dislike' }"
+                    @click.stop="votar(p, 'dislike')"
+                    title="Não achei um bom projeto"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/>
+                    </svg>
+                    <span>{{ p.dislikes || 0 }}</span>
+                  </button>
+                </div>
+
+                <button class="project-card__cta" @click="$emit('navegar', 'publicar')">
+                  Ver detalhes
+                </button>
+              </div>
             </footer>
           </article>
         </div>
@@ -162,13 +194,53 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import axios from 'axios';
+import { API_URL } from '../config';
 
 const props = defineProps({
-  projetos: { type: Array, default: () => [] }
+  projetos: { type: Array, default: () => [] },
+  user: { type: Object, default: null }
 });
 
 defineEmits(['navegar']);
+
+const projetosEmDestaque = computed(() => {
+  if (!props.projetos) return [];
+  return [...props.projetos].sort((a, b) => {
+    const saldoA = (a.likes || 0) - (a.dislikes || 0);
+    const saldoB = (b.likes || 0) - (b.dislikes || 0);
+    if (saldoB !== saldoA) return saldoB - saldoA;
+    if ((b.likes || 0) !== (a.likes || 0)) return (b.likes || 0) - (a.likes || 0);
+    return (b.id || 0) - (a.id || 0);
+  });
+});
+
+const votar = async (item, tipo) => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert("Você precisa estar conectado para votar nos projetos.");
+    return;
+  }
+
+  try {
+    const res = await axios.put(
+      `${API_URL}/projetos/${item.id}/votar`,
+      { tipo },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    item.likes = res.data.likes;
+    item.dislikes = res.data.dislikes;
+    item.meu_voto = res.data.meu_voto;
+  } catch (err) {
+    console.error("Erro ao votar no projeto:", err);
+    if (err.response?.status === 401) {
+      alert("Sua sessão expirou. Faça login novamente para votar.");
+    } else {
+      alert("Erro ao registrar seu voto. Tente novamente.");
+    }
+  }
+};
 
 const steps = [
   {
@@ -670,9 +742,18 @@ onUnmounted(() => {
   letter-spacing: -0.02em;
 }
 
+.project-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cx-space-3);
+  flex-wrap: wrap;
+}
+
 .project-card__cta {
-  width: 100%;
-  padding: 10px;
+  flex: 1;
+  min-width: 120px;
+  padding: 8px 12px;
   background: transparent;
   border: 1px solid var(--cx-border);
   border-radius: var(--cx-radius-md);
@@ -688,6 +769,45 @@ onUnmounted(() => {
   border-color: var(--cx-primary);
   color: var(--cx-primary);
   background: var(--cx-primary-alpha);
+}
+
+/* BOTÕES DE VOTAÇÃO */
+.vote-group {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2);
+}
+
+.vote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--cx-radius-md);
+  font-size: var(--cx-text-xs);
+  font-weight: 600;
+  font-family: var(--cx-font-sans);
+  border: 1px solid var(--cx-border);
+  background: var(--cx-bg);
+  color: var(--cx-text-2);
+  cursor: pointer;
+  transition: border-color var(--cx-transition-fast), color var(--cx-transition-fast), background var(--cx-transition-fast);
+}
+
+.vote-btn svg {
+  flex-shrink: 0;
+}
+
+.vote-btn--like:hover, .vote-btn--active-like {
+  border-color: var(--cx-primary);
+  color: var(--cx-primary-dark);
+  background: var(--cx-primary-light);
+}
+
+.vote-btn--dislike:hover, .vote-btn--active-dislike {
+  border-color: #fecaca;
+  color: #b91c1c;
+  background: #fef2f2;
 }
 
 /* ─── Empty state ───────────────────────────────────────────────────────────── */
