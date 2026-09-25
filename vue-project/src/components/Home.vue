@@ -83,6 +83,60 @@
       </div>
     </section>
 
+    <!-- ─── EXPANSÃO POR FILIAIS E FRANQUIAS ──────────────────────────────── -->
+    <section class="franchise-section cx-section" aria-labelledby="franchise-title">
+      <div class="cx-container">
+        <div class="franchise-banner">
+          <div class="franchise-banner__header">
+            <span class="cx-label">Modelo de Expansão</span>
+            <h2 id="franchise-title" class="cx-section-title">Expansão por Filiais & Franquias</h2>
+            <p class="cx-section-sub">
+              Conectamos empreendedores e investidores a unidades locais de marcas consolidadas e modelos de negócio testados no mercado.
+            </p>
+          </div>
+
+          <div class="franchise-cards">
+            <div class="franchise-card">
+              <div class="franchise-card__icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M3 21h18M3 7v14M21 7v14M6 21V11m4 10V11m4 10V11m4 10V11M3 7l9-4 9 4"/>
+                </svg>
+              </div>
+              <div class="franchise-card__content">
+                <h3>Modelos Operacionais Testados</h3>
+                <p>Marcas consolidadas disponibilizam unidades com processos estruturados, reduzindo riscos de implementação.</p>
+              </div>
+            </div>
+
+            <div class="franchise-card">
+              <div class="franchise-card__icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                  <circle cx="12" cy="10" r="3"/>
+                </svg>
+              </div>
+              <div class="franchise-card__content">
+                <h3>Oportunidades Regionais</h3>
+                <p>Mapeamento de demanda por cidade e estado para aquisição de repasses de unidades ou abertura de filiais.</p>
+              </div>
+            </div>
+
+            <div class="franchise-card">
+              <div class="franchise-card__icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+              </div>
+              <div class="franchise-card__content">
+                <h3>Transparência em Repasses</h3>
+                <p>Valores de repasse, equity e condições de operação alinhadas diretamente entre fundadores e investidores.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ─── PROJETOS EM DESTAQUE ──────────────────────────────────────────── -->
     <section class="projects cx-section cx-section--alt" aria-labelledby="projects-title">
       <div class="cx-container">
@@ -1080,5 +1134,77 @@ onUnmounted(() => {
 
 .text-emerald {
   color: #10b981 !important;
+}
+
+/* ─── SECÇÃO EXPLICATIVA DE FILIAIS & FRANQUIAS ─────────────────── */
+.franchise-section {
+  padding: 4.5rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.6) 0%, rgba(15, 23, 42, 0.9) 100%);
+}
+
+.franchise-banner__header {
+  text-align: center;
+  max-width: 680px;
+  margin: 0 auto 3rem auto;
+}
+
+.franchise-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.franchise-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.25rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.franchise-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(16, 185, 129, 0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px -10px rgba(16, 185, 129, 0.15);
+}
+
+.franchise-card__icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.franchise-card__content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #f8fafc;
+  margin-bottom: 0.5rem;
+}
+
+.franchise-card__content p {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--cx-text-muted, #94a3b8);
+}
+
+@media (max-width: 900px) {
+  .franchise-cards {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
 }
 </style>

@@ -59,7 +59,7 @@
               <div class="cx-field cx-field--filial-toggle">
                 <label class="cx-checkbox-box">
                   <input type="checkbox" v-model="novo.eh_filial" class="cx-checkbox" />
-                  <span class="cx-checkbox-text">🏬 É uma Filial ou Franquia Existente?</span>
+                  <span class="cx-checkbox-text">É uma filial ou franquia existente?</span>
                 </label>
               </div>
 
@@ -1055,12 +1055,18 @@ const fecharChat = () => {
 }
 
 .cx-field--filial-toggle {
-  margin-top: 0.5rem;
+  margin-top: 0.75rem;
   margin-bottom: 0.5rem;
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  padding: 10px 14px;
+  padding: 12px 14px;
+  transition: all 0.2s ease;
+}
+
+.cx-field--filial-toggle:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .cx-checkbox-box {
@@ -1072,27 +1078,27 @@ const fecharChat = () => {
 }
 
 .cx-checkbox {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   accent-color: #10b981;
   cursor: pointer;
 }
 
 .cx-checkbox-text {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #10b981;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--cx-text-muted, #cbd5e1);
 }
 
 .filial-box {
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px dashed rgba(16, 185, 129, 0.3);
+  background: rgba(15, 23, 42, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  padding: 14px;
+  padding: 16px;
   margin-bottom: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .project-item__badge--filial {
