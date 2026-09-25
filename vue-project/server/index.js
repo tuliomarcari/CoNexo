@@ -146,7 +146,7 @@ async function inicializarBanco() {
       `);
     } catch (e) { console.error("Aviso tabela usuarios:", e.message); }
 
-    // Tabela Projetos (com campos de likes e dislikes)
+    // Tabela Projetos (com campos de likes, dislikes e franquias/filiais)
     try {
       await connection.query(`
         CREATE TABLE IF NOT EXISTS projetos (
@@ -164,12 +164,22 @@ async function inicializarBanco() {
           imagem_url LONGTEXT,
           status VARCHAR(20) DEFAULT 'pendente',
           likes INT DEFAULT 0,
-          dislikes INT DEFAULT 0
+          dislikes INT DEFAULT 0,
+          eh_filial TINYINT(1) DEFAULT 0,
+          marca_principal VARCHAR(255),
+          estado_filial VARCHAR(50),
+          cidade_filial VARCHAR(255),
+          valor_repasse DECIMAL(15,2)
         )
       `);
       try { await connection.query(`ALTER TABLE projetos MODIFY COLUMN imagem_url LONGTEXT`); } catch (e) {}
       try { await connection.query(`ALTER TABLE projetos ADD COLUMN likes INT DEFAULT 0`); } catch (e) {}
       try { await connection.query(`ALTER TABLE projetos ADD COLUMN dislikes INT DEFAULT 0`); } catch (e) {}
+      try { await connection.query(`ALTER TABLE projetos ADD COLUMN eh_filial TINYINT(1) DEFAULT 0`); } catch (e) {}
+      try { await connection.query(`ALTER TABLE projetos ADD COLUMN marca_principal VARCHAR(255)`); } catch (e) {}
+      try { await connection.query(`ALTER TABLE projetos ADD COLUMN estado_filial VARCHAR(50)`); } catch (e) {}
+      try { await connection.query(`ALTER TABLE projetos ADD COLUMN cidade_filial VARCHAR(255)`); } catch (e) {}
+      try { await connection.query(`ALTER TABLE projetos ADD COLUMN valor_repasse DECIMAL(15,2)`); } catch (e) {}
     } catch (e) {
       console.error("Aviso tabela projetos:", e.message);
     }
@@ -432,7 +442,11 @@ app.get(["/projetos/:id", "/api/projetos/:id"], autenticarToken, async (req, res
 
 // CRIAÇÃO DE PROJETO
 app.post(["/projetos", "/api/projetos"], async (req, res) => {
-  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, email, telefone, imagem_url, status } = req.body;
+  const { 
+    empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, 
+    email_contato, email, telefone, imagem_url, status,
+    eh_filial, is_filial, marca_principal, estado_filial, cidade_filial, valor_repasse
+  } = req.body;
 
   try {
     const valorNum = (valor !== undefined && valor !== null && valor !== '') ? parseFloat(valor) : 0;
@@ -443,9 +457,18 @@ app.post(["/projetos", "/api/projetos"], async (req, res) => {
     const img = imagem_url || null;
     const st = status || 'pendente';
 
+    const ehFilialVal = (eh_filial === true || eh_filial === 'true' || eh_filial === 1 || is_filial === true || is_filial === 'true' || is_filial === 1) ? 1 : 0;
+    const marcaPrincipalVal = marca_principal ? String(marca_principal).trim() : null;
+    const estadoFilialVal = estado_filial ? String(estado_filial).trim() : null;
+    const cidadeFilialVal = cidade_filial ? String(cidade_filial).trim() : null;
+    const valorRepasseVal = (valor_repasse !== undefined && valor_repasse !== null && valor_repasse !== '') ? parseFloat(valor_repasse) : null;
+
     await pool.query(
-      `INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, imagem_url, status, likes, dislikes) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+      `INSERT INTO projetos (
+        empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, 
+        email_contato, telefone, imagem_url, status, likes, dislikes,
+        eh_filial, marca_principal, estado_filial, cidade_filial, valor_repasse
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`,
       [
         empresa || '',
         estado || '',
@@ -458,7 +481,12 @@ app.post(["/projetos", "/api/projetos"], async (req, res) => {
         destEmail,
         tel,
         img,
-        st
+        st,
+        ehFilialVal,
+        marcaPrincipalVal,
+        estadoFilialVal,
+        cidadeFilialVal,
+        valorRepasseVal
       ]
     );
 

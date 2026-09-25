@@ -91,6 +91,34 @@
           <h2 id="projects-title" class="cx-section-title">Projetos em destaque</h2>
         </div>
 
+        <!-- FILTROS RÁPIDOS DE MODELO DE NEGÓCIO -->
+        <div class="home-filter-pills" v-if="projetos.length > 0">
+          <button 
+            type="button"
+            class="pill-btn" 
+            :class="{ 'pill-btn--active': filtroModelo === 'todos' }" 
+            @click="filtroModelo = 'todos'"
+          >
+            ⚡ Todos
+          </button>
+          <button 
+            type="button"
+            class="pill-btn" 
+            :class="{ 'pill-btn--active': filtroModelo === 'filiais' }" 
+            @click="filtroModelo = 'filiais'"
+          >
+            🏬 Filiais & Franquias
+          </button>
+          <button 
+            type="button"
+            class="pill-btn" 
+            :class="{ 'pill-btn--active': filtroModelo === 'originais' }" 
+            @click="filtroModelo = 'originais'"
+          >
+            🚀 Negócios Originais
+          </button>
+        </div>
+
         <div v-if="projetos.length === 0" class="cx-empty" role="status">
           <div class="cx-empty__icon" aria-hidden="true">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -100,6 +128,10 @@
             </svg>
           </div>
           <p>Nenhum projeto publicado ainda. Os aprovados aparecerão aqui.</p>
+        </div>
+
+        <div v-else-if="projetosEmDestaque.length === 0" class="cx-empty" role="status">
+          <p>Nenhuma oportunidade encontrada para este filtro.</p>
         </div>
 
         <div class="projects__grid" v-else>
@@ -123,9 +155,16 @@
             </div>
 
             <header class="project-card__head">
-              <span class="project-card__badge">{{ p.nicho || 'Geral' }}</span>
-              <span class="project-card__location">{{ p.cidade }}, {{ p.estado }}</span>
+              <span v-if="p.eh_filial || p.is_filial" class="project-card__badge project-card__badge--filial" :title="p.marca_principal ? 'Franquia: ' + p.marca_principal : 'Filial'">
+                🏬 Filial {{ p.marca_principal ? '• ' + p.marca_principal : '' }}
+              </span>
+              <span v-else class="project-card__badge">{{ p.nicho || 'Geral' }}</span>
+              
+              <span class="project-card__location">
+                📍 {{ (p.eh_filial || p.is_filial) && (p.cidade_filial || p.estado_filial) ? (p.cidade_filial || p.cidade) + ', ' + (p.estado_filial || p.estado) : p.cidade + ', ' + p.estado }}
+              </span>
             </header>
+
             <h3 class="project-card__title">{{ p.empresa }}</h3>
             <p class="project-card__desc">{{ p.descricao }}</p>
             <footer class="project-card__foot">
@@ -137,6 +176,10 @@
                 <div class="project-card__meta-item">
                   <span class="project-card__meta-label">Equity</span>
                   <strong class="project-card__meta-value">{{ p.porcentagem }}%</strong>
+                </div>
+                <div v-if="(p.eh_filial || p.is_filial) && p.valor_repasse" class="project-card__meta-item project-card__meta-item--repasse">
+                  <span class="project-card__meta-label">Repasse Filial</span>
+                  <strong class="project-card__meta-value text-emerald">R$ {{ Number(p.valor_repasse).toLocaleString('pt-BR') }}</strong>
                 </div>
               </div>
 
@@ -205,9 +248,19 @@ const props = defineProps({
 
 defineEmits(['navegar']);
 
+const filtroModelo = ref('todos'); // 'todos', 'filiais', 'originais'
+
 const projetosEmDestaque = computed(() => {
   if (!props.projetos) return [];
-  return [...props.projetos].sort((a, b) => {
+  
+  let lista = [...props.projetos];
+  if (filtroModelo.value === 'filiais') {
+    lista = lista.filter(p => Boolean(p.eh_filial || p.is_filial));
+  } else if (filtroModelo.value === 'originais') {
+    lista = lista.filter(p => !Boolean(p.eh_filial || p.is_filial));
+  }
+
+  return lista.sort((a, b) => {
     const saldoA = (a.likes || 0) - (a.dislikes || 0);
     const saldoB = (b.likes || 0) - (b.dislikes || 0);
     if (saldoB !== saldoA) return saldoB - saldoA;
@@ -976,5 +1029,56 @@ onUnmounted(() => {
   }
   .cx-footer__inner { flex-direction: column; text-align: center; }
   .how__step { padding: var(--cx-space-6); }
+}
+
+.home-filter-pills {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.pill-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--cx-text-muted, #94a3b8);
+  padding: 8px 16px;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pill-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.pill-btn--active {
+  background: #10b981;
+  color: #0f172a;
+  font-weight: 600;
+  border-color: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+}
+
+.project-card__badge--filial {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #10b981 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.project-card__meta-item--repasse {
+  grid-column: span 2;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px stroke rgba(255, 255, 255, 0.05);
+}
+
+.text-emerald {
+  color: #10b981 !important;
 }
 </style>
