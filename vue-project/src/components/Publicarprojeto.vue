@@ -506,7 +506,8 @@ const votar = async (item, tipo) => {
     if (err.response?.status === 401) {
       alert("Sua sessão expirou. Faça login novamente para votar.");
     } else {
-      alert("Erro ao registrar seu voto. Tente novamente.");
+      const mensagemErro = err.response?.data?.error || err.response?.data?.message || "Erro ao registrar seu voto. Verifique sua conexão e tente novamente.";
+      alert(mensagemErro);
     }
   }
 };

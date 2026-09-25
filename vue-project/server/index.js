@@ -13,7 +13,12 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
 
-// Configuração da conexão com o banco de dados MySQL (Aiven)
+// Health Check Endpoint (Render & Uptime monitors)
+app.get(["/", "/health", "/api/health"], (req, res) => {
+  res.json({ status: "online", message: "Servidor CoNexo Backend ativo e operacional!" });
+});
+
+// Configuração da conexão com o banco de dados MySQL (Aiven / Render DB)
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -141,7 +146,7 @@ async function inicializarBanco() {
       `);
     } catch (e) { console.error("Aviso tabela usuarios:", e.message); }
 
-    // Tabela Projetos
+    // Tabela Projetos (com campos de likes e dislikes)
     try {
       await connection.query(`
         CREATE TABLE IF NOT EXISTS projetos (
@@ -157,13 +162,19 @@ async function inicializarBanco() {
           email_contato VARCHAR(255), 
           telefone VARCHAR(20), 
           imagem_url LONGTEXT,
-          status VARCHAR(20) DEFAULT 'pendente'
+          status VARCHAR(20) DEFAULT 'pendente',
+          likes INT DEFAULT 0,
+          dislikes INT DEFAULT 0
         )
       `);
-      await connection.query(`ALTER TABLE projetos MODIFY COLUMN imagem_url LONGTEXT`);
-    } catch (e) {}
+      try { await connection.query(`ALTER TABLE projetos MODIFY COLUMN imagem_url LONGTEXT`); } catch (e) {}
+      try { await connection.query(`ALTER TABLE projetos ADD COLUMN likes INT DEFAULT 0`); } catch (e) {}
+      try { await connection.query(`ALTER TABLE projetos ADD COLUMN dislikes INT DEFAULT 0`); } catch (e) {}
+    } catch (e) {
+      console.error("Aviso tabela projetos:", e.message);
+    }
 
-    // Tabela Ideias
+    // Tabela Ideias (com campos de likes e dislikes)
     try {
       await connection.query(`
         CREATE TABLE IF NOT EXISTS ideias (
@@ -172,11 +183,17 @@ async function inicializarBanco() {
           nicho VARCHAR(100), 
           descricao TEXT, 
           data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
-          status VARCHAR(20) DEFAULT 'pendente'
+          status VARCHAR(20) DEFAULT 'pendente',
+          likes INT DEFAULT 0,
+          dislikes INT DEFAULT 0
         )
       `);
-      await connection.query(`ALTER TABLE ideias ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'`);
-    } catch (e) {}
+      try { await connection.query(`ALTER TABLE ideias ADD COLUMN status VARCHAR(20) DEFAULT 'pendente'`); } catch (e) {}
+      try { await connection.query(`ALTER TABLE ideias ADD COLUMN likes INT DEFAULT 0`); } catch (e) {}
+      try { await connection.query(`ALTER TABLE ideias ADD COLUMN dislikes INT DEFAULT 0`); } catch (e) {}
+    } catch (e) {
+      console.error("Aviso tabela ideias:", e.message);
+    }
 
     // Tabela Votos Ideias
     try {
@@ -204,31 +221,22 @@ async function inicializarBanco() {
       `);
     } catch (e) {}
 
-    // Tabela Mensagens / Chat (Estrutura Exata com Colunas Garantidas)
+    // Tabela Mensagens / Chat
     try {
       await connection.query(`
         CREATE TABLE IF NOT EXISTS mensagens (
           id INT AUTO_INCREMENT PRIMARY KEY,
           projeto_id INT NOT NULL,
           remetente VARCHAR(255),
-          mensagem TEXT NOT NULL,
+          mensagem TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `);
 
-      // Tenta adicionar a coluna caso a tabela já exista sem ela
-      try {
-        await connection.query("ALTER TABLE mensagens ADD COLUMN mensagem TEXT;");
-      } catch (e) {}
-      try {
-        await connection.query("ALTER TABLE mensagens ADD COLUMN conteudo TEXT;");
-      } catch (e) {}
-      try {
-        await connection.query("ALTER TABLE mensagens ADD COLUMN remetente VARCHAR(255);");
-      } catch (e) {}
-      try {
-        await connection.query("ALTER TABLE mensagens ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;");
-      } catch (e) {}
+      try { await connection.query("ALTER TABLE mensagens ADD COLUMN mensagem TEXT;"); } catch (e) {}
+      try { await connection.query("ALTER TABLE mensagens ADD COLUMN conteudo TEXT;"); } catch (e) {}
+      try { await connection.query("ALTER TABLE mensagens ADD COLUMN remetente VARCHAR(255);"); } catch (e) {}
+      try { await connection.query("ALTER TABLE mensagens ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"); } catch (e) {}
     } catch (e) {
       console.error("Aviso no ajuste da tabela mensagens:", e.message);
     }
@@ -268,7 +276,7 @@ async function inicializarBanco() {
 // --- ROTAS DA API ---
 
 // CADASTRO
-app.post("/cadastro", async (req, res) => {
+app.post(["/cadastro", "/api/cadastro"], async (req, res) => {
   const { nome, email, senha } = req.body;
   if (!nome || !email || !senha || !nome.trim() || !email.trim() || !senha.trim()) {
     return res.status(400).json({ error: "Preencha todos os campos obrigatórios" });
@@ -297,7 +305,7 @@ app.post("/cadastro", async (req, res) => {
 });
 
 // LOGIN
-app.post("/login", async (req, res) => {
+app.post(["/login", "/api/login"], async (req, res) => {
   const { email, senha } = req.body;
   if (!email || !senha) {
     return res.status(400).json({ error: "E-mail e senha são obrigatórios" });
@@ -345,27 +353,43 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// LISTAGEM PÚBLICA DE PROJETOS APROVADOS
-app.get("/projetos", autenticarToken, async (req, res) => {
+// LISTAGEM PÚBLICA DE PROJETOS APROVADOS (Com Votos e Status de Voto do Usuário Logado)
+app.get(["/projetos", "/api/projetos"], autenticarToken, async (req, res) => {
   const usuario_id = req.usuario?.id || 0;
   try {
     const [rows] = await pool.query(`
       SELECT 
         p.*,
-        COALESCE(SUM(CASE WHEN v.tipo_voto = 'like' THEN 1 ELSE 0 END), 0) AS likes,
-        COALESCE(SUM(CASE WHEN v.tipo_voto = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes,
+        COALESCE(v_agg.likes, p.likes, 0) AS likes,
+        COALESCE(v_agg.dislikes, p.dislikes, 0) AS dislikes,
         MAX(CASE WHEN v.usuario_id = ? THEN v.tipo_voto ELSE NULL END) AS meu_voto
       FROM projetos p
       LEFT JOIN votos_projetos v ON p.id = v.projeto_id
+      LEFT JOIN (
+        SELECT 
+          projeto_id,
+          SUM(CASE WHEN tipo_voto = 'like' THEN 1 ELSE 0 END) AS likes,
+          SUM(CASE WHEN tipo_voto = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+        FROM votos_projetos
+        GROUP BY projeto_id
+      ) v_agg ON p.id = v_agg.projeto_id
       WHERE p.status = 'aprovado' OR p.status IS NULL OR p.status = ''
       GROUP BY p.id
       ORDER BY p.id DESC
     `, [usuario_id]);
     res.json(rows);
   } catch (err) {
-    console.error("Erro ao listar projetos:", err);
+    console.error("Erro ao listar projetos com agregador de votos:", err.message);
     try {
-      const [rowsSimples] = await pool.query("SELECT * FROM projetos WHERE status = 'aprovado' OR status IS NULL OR status = '' ORDER BY id DESC");
+      const [rowsSimples] = await pool.query(`
+        SELECT 
+          p.*,
+          COALESCE(p.likes, 0) AS likes,
+          COALESCE(p.dislikes, 0) AS dislikes
+        FROM projetos p 
+        WHERE p.status = 'aprovado' OR p.status IS NULL OR p.status = '' 
+        ORDER BY p.id DESC
+      `);
       res.json(rowsSimples);
     } catch (e) {
       res.status(500).json({ error: "Erro interno ao listar projetos" });
@@ -373,8 +397,41 @@ app.get("/projetos", autenticarToken, async (req, res) => {
   }
 });
 
+// DETALHES DE UM PROJETO POR ID
+app.get(["/projetos/:id", "/api/projetos/:id"], autenticarToken, async (req, res) => {
+  const projeto_id = parseInt(req.params.id, 10);
+  const usuario_id = req.usuario?.id || 0;
+
+  if (isNaN(projeto_id)) {
+    return res.status(400).json({ error: "ID de projeto inválido" });
+  }
+
+  try {
+    const [rows] = await pool.query(`
+      SELECT 
+        p.*,
+        COALESCE(SUM(CASE WHEN v.tipo_voto = 'like' THEN 1 ELSE 0 END), p.likes, 0) AS likes,
+        COALESCE(SUM(CASE WHEN v.tipo_voto = 'dislike' THEN 1 ELSE 0 END), p.dislikes, 0) AS dislikes,
+        MAX(CASE WHEN v.usuario_id = ? THEN v.tipo_voto ELSE NULL END) AS meu_voto
+      FROM projetos p
+      LEFT JOIN votos_projetos v ON p.id = v.projeto_id
+      WHERE p.id = ?
+      GROUP BY p.id
+    `, [usuario_id, projeto_id]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Projeto não encontrado" });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    console.error("Erro ao buscar detalhes do projeto:", err);
+    res.status(500).json({ error: "Erro interno ao buscar projeto" });
+  }
+});
+
 // CRIAÇÃO DE PROJETO
-app.post("/projetos", async (req, res) => {
+app.post(["/projetos", "/api/projetos"], async (req, res) => {
   const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, email, telefone, imagem_url, status } = req.body;
 
   try {
@@ -387,8 +444,8 @@ app.post("/projetos", async (req, res) => {
     const st = status || 'pendente';
 
     await pool.query(
-      `INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, imagem_url, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, imagem_url, status, likes, dislikes) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
       [
         empresa || '',
         estado || '',
@@ -416,21 +473,39 @@ app.post("/projetos", async (req, res) => {
   }
 });
 
-// VOTAÇÃO EM PROJETOS
+// VOTAÇÃO EM PROJETOS (HANDLERS SUPORTANDO VÁRIAS ROTAS E VERBOS HTTP)
 const votarProjetoHandler = async (req, res) => {
-  const projeto_id = req.params.id;
+  const projeto_id = parseInt(req.params.id, 10);
   const usuario_id = req.usuario?.id;
-  const { tipo } = req.body;
+
+  if (isNaN(projeto_id)) {
+    return res.status(400).json({ error: "ID do projeto inválido." });
+  }
 
   if (!usuario_id) {
     return res.status(401).json({ error: "Você precisa estar conectado para votar." });
   }
 
+  let tipo = req.body.tipo || req.body.voto || req.body.tipo_voto;
+  const path = req.path.toLowerCase();
+  if (path.endsWith('/like')) {
+    tipo = 'like';
+  } else if (path.endsWith('/dislike')) {
+    tipo = 'dislike';
+  }
+
   if (tipo !== 'like' && tipo !== 'dislike') {
-    return res.status(400).json({ error: "Tipo de voto inválido." });
+    return res.status(400).json({ error: "Tipo de voto inválido. Use 'like' ou 'dislike'." });
   }
 
   try {
+    // 1. Verificar existência do projeto
+    const [projetos] = await pool.query("SELECT * FROM projetos WHERE id = ?", [projeto_id]);
+    if (projetos.length === 0) {
+      return res.status(404).json({ error: "Projeto não encontrado." });
+    }
+
+    // 2. Verificar voto existente do usuário
     const [existente] = await pool.query(
       "SELECT id, tipo_voto FROM votos_projetos WHERE usuario_id = ? AND projeto_id = ?",
       [usuario_id, projeto_id]
@@ -438,53 +513,88 @@ const votarProjetoHandler = async (req, res) => {
 
     if (existente.length > 0) {
       if (existente[0].tipo_voto === tipo) {
+        // Toggle OFF se votou no mesmo tipo
         await pool.query("DELETE FROM votos_projetos WHERE id = ?", [existente[0].id]);
       } else {
+        // Altera para o novo tipo
         await pool.query("UPDATE votos_projetos SET tipo_voto = ? WHERE id = ?", [tipo, existente[0].id]);
       }
     } else {
+      // Insere novo voto
       await pool.query(
         "INSERT INTO votos_projetos (usuario_id, projeto_id, tipo_voto) VALUES (?, ?, ?)",
         [usuario_id, projeto_id, tipo]
       );
     }
 
+    // 3. Recalcula os totais de likes e dislikes
     const [contagem] = await pool.query(`
       SELECT 
-        SUM(CASE WHEN tipo_voto = 'like' THEN 1 ELSE 0 END) AS likes,
-        SUM(CASE WHEN tipo_voto = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+        COALESCE(SUM(CASE WHEN tipo_voto = 'like' THEN 1 ELSE 0 END), 0) AS likes,
+        COALESCE(SUM(CASE WHEN tipo_voto = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes
       FROM votos_projetos 
       WHERE projeto_id = ?
     `, [projeto_id]);
 
+    const totalLikes = Number(contagem[0]?.likes || 0);
+    const totalDislikes = Number(contagem[0]?.dislikes || 0);
+
+    // 4. Atualiza a tabela `projetos` para garantir sincronia no banco de dados
+    try {
+      await pool.query(
+        "UPDATE projetos SET likes = ?, dislikes = ? WHERE id = ?",
+        [totalLikes, totalDislikes, projeto_id]
+      );
+    } catch (eCol) {
+      console.warn("Aviso ao atualizar colunas likes/dislikes em projetos:", eCol.message);
+    }
+
+    // 5. Obtém o estado do voto do perfil do usuário logado
     const [votoPerfil] = await pool.query(
       "SELECT tipo_voto FROM votos_projetos WHERE usuario_id = ? AND projeto_id = ?",
       [usuario_id, projeto_id]
     );
+    const meuVoto = votoPerfil.length > 0 ? votoPerfil[0].tipo_voto : null;
+
+    // 6. Obtém o objeto completo do projeto atualizado
+    const [projetoRows] = await pool.query("SELECT * FROM projetos WHERE id = ?", [projeto_id]);
+    const projetoAtualizado = projetoRows[0] || {};
+    projetoAtualizado.likes = totalLikes;
+    projetoAtualizado.dislikes = totalDislikes;
+    projetoAtualizado.meu_voto = meuVoto;
 
     res.json({
-      likes: Number(contagem[0]?.likes || 0),
-      dislikes: Number(contagem[0]?.dislikes || 0),
-      meu_voto: votoPerfil.length > 0 ? votoPerfil[0].tipo_voto : null
+      message: "Voto registrado com sucesso!",
+      likes: totalLikes,
+      dislikes: totalDislikes,
+      meu_voto: meuVoto,
+      projeto: projetoAtualizado
     });
   } catch (err) {
     console.error("Erro ao registrar voto no projeto:", err);
-    res.status(500).json({ error: "Erro interno ao registrar voto" });
+    res.status(500).json({ error: "Erro interno ao registrar voto", details: err.message });
   }
 };
 
-app.put("/projetos/:id/votar", autenticarToken, votarProjetoHandler);
-app.post("/projetos/:id/votar", autenticarToken, votarProjetoHandler);
+const rotasVotoProjeto = [
+  "/projetos/:id/votar", "/api/projetos/:id/votar",
+  "/projetos/:id/like", "/api/projetos/:id/like",
+  "/projetos/:id/dislike", "/api/projetos/:id/dislike",
+  "/projetos/:id/voto", "/api/projetos/:id/voto"
+];
+
+app.put(rotasVotoProjeto, autenticarToken, votarProjetoHandler);
+app.post(rotasVotoProjeto, autenticarToken, votarProjetoHandler);
 
 // LISTAGEM PÚBLICA DE IDEIAS APROVADAS
-app.get("/ideias", autenticarToken, async (req, res) => {
+app.get(["/ideias", "/api/ideias"], autenticarToken, async (req, res) => {
   const usuario_id = req.usuario?.id || 0;
   try {
     const [rows] = await pool.query(`
       SELECT 
         i.*,
-        COALESCE(SUM(CASE WHEN v.tipo_voto = 'like' THEN 1 ELSE 0 END), 0) AS likes,
-        COALESCE(SUM(CASE WHEN v.tipo_voto = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes,
+        COALESCE(SUM(CASE WHEN v.tipo_voto = 'like' THEN 1 ELSE 0 END), i.likes, 0) AS likes,
+        COALESCE(SUM(CASE WHEN v.tipo_voto = 'dislike' THEN 1 ELSE 0 END), i.dislikes, 0) AS dislikes,
         MAX(CASE WHEN v.usuario_id = ? THEN v.tipo_voto ELSE NULL END) AS meu_voto
       FROM ideias i
       LEFT JOIN votos_ideias v ON i.id = v.ideia_id
@@ -494,9 +604,9 @@ app.get("/ideias", autenticarToken, async (req, res) => {
     `, [usuario_id]);
     res.json(rows);
   } catch (err) {
-    console.error("Erro ao listar ideias com votos, tentando fallback simples:", err.message);
+    console.error("Erro ao listar ideias com votos:", err.message);
     try {
-      const [rowsSimples] = await pool.query("SELECT * FROM ideias WHERE status = 'aprovado' OR status IS NULL OR status = '' ORDER BY id DESC");
+      const [rowsSimples] = await pool.query("SELECT *, COALESCE(likes, 0) AS likes, COALESCE(dislikes, 0) AS dislikes FROM ideias WHERE status = 'aprovado' OR status IS NULL OR status = '' ORDER BY id DESC");
       res.json(rowsSimples);
     } catch (e) {
       res.status(500).json({ error: "Erro interno ao listar ideias" });
@@ -505,11 +615,11 @@ app.get("/ideias", autenticarToken, async (req, res) => {
 });
 
 // CRIAÇÃO DE IDEIA
-app.post("/ideias", async (req, res) => {
+app.post(["/ideias", "/api/ideias"], async (req, res) => {
   const { titulo, nicho, descricao, email_contato, email } = req.body;
   try {
     await pool.query(
-      "INSERT INTO ideias (titulo, nicho, descricao, status) VALUES (?, ?, ?, 'pendente')",
+      "INSERT INTO ideias (titulo, nicho, descricao, status, likes, dislikes) VALUES (?, ?, ?, 'pendente', 0, 0)",
       [titulo || '', nicho || '', descricao || '']
     );
 
@@ -526,17 +636,28 @@ app.post("/ideias", async (req, res) => {
 });
 
 // VOTAÇÃO EM IDEIAS
-app.put("/ideias/:id/votar", autenticarToken, async (req, res) => {
-  const ideia_id = req.params.id;
+const votarIdeiaHandler = async (req, res) => {
+  const ideia_id = parseInt(req.params.id, 10);
   const usuario_id = req.usuario?.id;
-  const { tipo } = req.body;
+
+  if (isNaN(ideia_id)) {
+    return res.status(400).json({ error: "ID da ideia inválido." });
+  }
 
   if (!usuario_id) {
     return res.status(401).json({ error: "Você precisa estar conectado para votar." });
   }
 
+  let tipo = req.body.tipo || req.body.voto || req.body.tipo_voto;
+  const path = req.path.toLowerCase();
+  if (path.endsWith('/like')) {
+    tipo = 'like';
+  } else if (path.endsWith('/dislike')) {
+    tipo = 'dislike';
+  }
+
   if (tipo !== 'like' && tipo !== 'dislike') {
-    return res.status(400).json({ error: "Tipo de voto inválido." });
+    return res.status(400).json({ error: "Tipo de voto inválido. Use 'like' ou 'dislike'." });
   }
 
   try {
@@ -560,27 +681,56 @@ app.put("/ideias/:id/votar", autenticarToken, async (req, res) => {
 
     const [contagem] = await pool.query(`
       SELECT 
-        SUM(CASE WHEN tipo_voto = 'like' THEN 1 ELSE 0 END) AS likes,
-        SUM(CASE WHEN tipo_voto = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+        COALESCE(SUM(CASE WHEN tipo_voto = 'like' THEN 1 ELSE 0 END), 0) AS likes,
+        COALESCE(SUM(CASE WHEN tipo_voto = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes
       FROM votos_ideias 
       WHERE ideia_id = ?
     `, [ideia_id]);
+
+    const totalLikes = Number(contagem[0]?.likes || 0);
+    const totalDislikes = Number(contagem[0]?.dislikes || 0);
+
+    try {
+      await pool.query(
+        "UPDATE ideias SET likes = ?, dislikes = ? WHERE id = ?",
+        [totalLikes, totalDislikes, ideia_id]
+      );
+    } catch (eCol) {}
 
     const [votoPerfil] = await pool.query(
       "SELECT tipo_voto FROM votos_ideias WHERE usuario_id = ? AND ideia_id = ?",
       [usuario_id, ideia_id]
     );
+    const meuVoto = votoPerfil.length > 0 ? votoPerfil[0].tipo_voto : null;
+
+    const [ideiaRows] = await pool.query("SELECT * FROM ideias WHERE id = ?", [ideia_id]);
+    const ideiaAtualizada = ideiaRows[0] || {};
+    ideiaAtualizada.likes = totalLikes;
+    ideiaAtualizada.dislikes = totalDislikes;
+    ideiaAtualizada.meu_voto = meuVoto;
 
     res.json({
-      likes: Number(contagem[0]?.likes || 0),
-      dislikes: Number(contagem[0]?.dislikes || 0),
-      meu_voto: votoPerfil.length > 0 ? votoPerfil[0].tipo_voto : null
+      message: "Voto registrado com sucesso!",
+      likes: totalLikes,
+      dislikes: totalDislikes,
+      meu_voto: meuVoto,
+      ideia: ideiaAtualizada
     });
   } catch (err) {
-    console.error("Erro ao registrar voto:", err);
+    console.error("Erro ao registrar voto na ideia:", err);
     res.status(500).json({ error: "Erro interno ao registrar voto" });
   }
-});
+};
+
+const rotasVotoIdeia = [
+  "/ideias/:id/votar", "/api/ideias/:id/votar",
+  "/ideias/:id/like", "/api/ideias/:id/like",
+  "/ideias/:id/dislike", "/api/ideias/:id/dislike",
+  "/ideias/:id/voto", "/api/ideias/:id/voto"
+];
+
+app.put(rotasVotoIdeia, autenticarToken, votarIdeiaHandler);
+app.post(rotasVotoIdeia, autenticarToken, votarIdeiaHandler);
 
 // CHAT / MENSAGENS HANDLERS
 const enviarMensagemHandler = async (req, res) => {
@@ -867,20 +1017,23 @@ const minhasConversasHandler = async (req, res) => {
   }
 };
 
-app.post("/mensagens", autenticarToken, enviarMensagemHandler);
-app.post("/chat", autenticarToken, enviarMensagemHandler);
+const rotasMensagensEnviar = ["/mensagens", "/api/mensagens", "/chat", "/api/chat"];
+app.post(rotasMensagensEnviar, autenticarToken, enviarMensagemHandler);
 
-app.get("/mensagens/:projeto_id", autenticarToken, buscarMensagensHandler);
-app.get("/chat/:projeto_id", autenticarToken, buscarMensagensHandler);
+const rotasMensagensBuscar = ["/mensagens/:projeto_id", "/api/mensagens/:projeto_id", "/chat/:projeto_id", "/api/chat/:projeto_id"];
+app.get(rotasMensagensBuscar, autenticarToken, buscarMensagensHandler);
 
-app.get("/minhas-conversas", autenticarToken, minhasConversasHandler);
-app.get("/minhas-conversas/:usuario_id", autenticarToken, minhasConversasHandler);
-app.get("/conversas", autenticarToken, minhasConversasHandler);
-app.get("/conversas/usuario", autenticarToken, minhasConversasHandler);
-app.get("/mensagens/conversas", autenticarToken, minhasConversasHandler);
+const rotasMinhasConversas = [
+  "/minhas-conversas", "/api/minhas-conversas",
+  "/minhas-conversas/:usuario_id", "/api/minhas-conversas/:usuario_id",
+  "/conversas", "/api/conversas",
+  "/conversas/usuario", "/api/conversas/usuario",
+  "/mensagens/conversas", "/api/mensagens/conversas"
+];
+app.get(rotasMinhasConversas, autenticarToken, minhasConversasHandler);
 
 // CRIAR LOJA BUILDER
-app.post("/lojas", async (req, res) => {
+app.post(["/lojas", "/api/lojas"], async (req, res) => {
   const { nome_loja, usuario_id, banner_estilo, vitrine_estilo, rodape_estilo, cor_primaria, cor_secundaria, cor_terciaria } = req.body;
   try {
     await pool.query(
@@ -906,7 +1059,7 @@ app.post("/lojas", async (req, res) => {
 });
 
 // ADMIN: PENDENTES
-app.get("/admin/pendentes", async (req, res) => {
+app.get(["/admin/pendentes", "/api/admin/pendentes"], async (req, res) => {
   try {
     const [projetos] = await pool.query("SELECT *, 'projeto' as tipo_item FROM projetos WHERE status = 'pendente'");
     const [ideias] = await pool.query("SELECT *, 'ideia' as tipo_item FROM ideias WHERE status = 'pendente'");
@@ -918,7 +1071,7 @@ app.get("/admin/pendentes", async (req, res) => {
 });
 
 // ADMIN: LOJAS
-app.get("/admin/lojas", async (req, res) => {
+app.get(["/admin/lojas", "/api/admin/lojas"], async (req, res) => {
   try {
     const [lojas] = await pool.query(`
       SELECT 
@@ -937,7 +1090,7 @@ app.get("/admin/lojas", async (req, res) => {
 });
 
 // ADMIN: APROVAR
-app.put("/admin/aprovar/:id", async (req, res) => {
+app.put(["/admin/aprovar/:id", "/api/admin/aprovar/:id"], async (req, res) => {
   const { id } = req.params;
   const { tipo } = req.body;
   const tabela = (tipo === 'ideia') ? 'ideias' : 'projetos';
@@ -973,8 +1126,10 @@ app.put("/admin/aprovar/:id", async (req, res) => {
 });
 
 // DELETAR PROJETO
-app.delete("/projetos/:id", async (req, res) => {
+app.delete(["/projetos/:id", "/api/projetos/:id"], async (req, res) => {
   try {
+    await pool.query("DELETE FROM votos_projetos WHERE projeto_id = ?", [req.params.id]);
+    await pool.query("DELETE FROM mensagens WHERE projeto_id = ?", [req.params.id]);
     await pool.query("DELETE FROM projetos WHERE id = ?", [req.params.id]);
     res.json({ message: "Projeto excluído com sucesso!" });
   } catch (err) {
@@ -984,8 +1139,9 @@ app.delete("/projetos/:id", async (req, res) => {
 });
 
 // DELETAR IDEIA
-app.delete("/ideias/:id", async (req, res) => {
+app.delete(["/ideias/:id", "/api/ideias/:id"], async (req, res) => {
   try {
+    await pool.query("DELETE FROM votos_ideias WHERE ideia_id = ?", [req.params.id]);
     await pool.query("DELETE FROM ideias WHERE id = ?", [req.params.id]);
     res.json({ message: "Ideia excluída com sucesso!" });
   } catch (err) {
@@ -995,7 +1151,7 @@ app.delete("/ideias/:id", async (req, res) => {
 });
 
 // DELETAR LOJA
-app.delete("/admin/lojas/:id", async (req, res) => {
+app.delete(["/admin/lojas/:id", "/api/admin/lojas/:id"], async (req, res) => {
   try {
     await pool.query("DELETE FROM lojas WHERE id = ?", [req.params.id]);
     res.json({ message: "Loja excluída com sucesso!" });
