@@ -221,6 +221,12 @@
             </footer>
           </article>
         </div>
+
+        <div v-if="projetos.length > 3" class="projects__footer">
+          <button class="cx-btn cx-btn--outline" @click="$emit('navegar', 'publicar')">
+            Ver todos os {{ projetos.length }} projetos →
+          </button>
+        </div>
       </div>
     </section>
 
@@ -260,14 +266,34 @@ const imagemAnterior = (item) => {
 };
 
 const projetosEmDestaque = computed(() => {
-  if (!props.projetos) return [];
-  return [...props.projetos].sort((a, b) => {
-    const saldoA = (a.likes || 0) - (a.dislikes || 0);
-    const saldoB = (b.likes || 0) - (b.dislikes || 0);
-    if (saldoB !== saldoA) return saldoB - saldoA;
-    if ((b.likes || 0) !== (a.likes || 0)) return (b.likes || 0) - (a.likes || 0);
-    return (b.id || 0) - (a.id || 0);
-  });
+  if (!props.projetos || !Array.isArray(props.projetos)) return [];
+  return [...props.projetos]
+    .sort((a, b) => {
+      const likesA = Number(a.likes) || 0;
+      const likesB = Number(b.likes) || 0;
+
+      // 1. Ordenar por número de curtidas (likes) de forma decrescente
+      if (likesB !== likesA) {
+        return likesB - likesA;
+      }
+
+      // 2. Critério secundário de desempate: saldo líquido de curtidas (likes - dislikes)
+      const saldoA = likesA - (Number(a.dislikes) || 0);
+      const saldoB = likesB - (Number(b.dislikes) || 0);
+      if (saldoB !== saldoA) {
+        return saldoB - saldoA;
+      }
+
+      // 3. Terceiro critério de desempate: data de criação mais recente ou ID mais alto
+      const dataA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dataB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      if (dataB !== dataA) {
+        return dataB - dataA;
+      }
+
+      return (Number(b.id) || 0) - (Number(a.id) || 0);
+    })
+    .slice(0, 3);
 });
 
 const votar = async (item, tipo) => {
@@ -659,6 +685,19 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--cx-space-6);
+}
+
+.projects__footer {
+  margin-top: var(--cx-space-8);
+  display: flex;
+  justify-content: center;
+}
+
+.projects__footer .cx-btn {
+  padding: 0.85rem 2rem;
+  font-size: var(--cx-text-base);
+  font-weight: 600;
+  border-radius: var(--cx-radius-full);
 }
 
 .project-card {
