@@ -114,6 +114,32 @@
                 <span v-if="item.imagens && item.imagens.length > 1" class="admin-img-count-badge">
                   📷 {{ (item.fotoAtivaIndex || 0) + 1 }}/{{ item.imagens.length }}
                 </span>
+
+                <!-- Setas de navegação (Anterior / Próxima) -->
+                <template v-if="item.imagens && item.imagens.length > 1">
+                  <button 
+                    type="button" 
+                    class="card-arrow card-arrow--left" 
+                    @click.stop="imagemAnterior(item)"
+                    title="Imagem anterior"
+                    aria-label="Imagem anterior"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                  </button>
+                  <button 
+                    type="button" 
+                    class="card-arrow card-arrow--right" 
+                    @click.stop="proximaImagem(item)"
+                    title="Próxima imagem"
+                    aria-label="Próxima imagem"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </button>
+                </template>
               </div>
 
               <!-- Miniaturas para navegar por todas as fotos do projeto -->
@@ -267,6 +293,16 @@ const abaAtiva = ref('projetos');
 const pendentes = ref([]);
 const lojasCadastradas = ref([]);
 const erroAcesso = ref('');
+
+const proximaImagem = (item) => {
+  if (!item || !item.imagens || item.imagens.length <= 1) return;
+  item.fotoAtivaIndex = ((item.fotoAtivaIndex || 0) + 1) % item.imagens.length;
+};
+
+const imagemAnterior = (item) => {
+  if (!item || !item.imagens || item.imagens.length <= 1) return;
+  item.fotoAtivaIndex = ((item.fotoAtivaIndex || 0) - 1 + item.imagens.length) % item.imagens.length;
+};
 
 const projetosPendentes = computed(() => pendentes.value.filter(p => p.tipo_item === 'projeto'));
 const ideiasPendentes = computed(() => pendentes.value.filter(p => p.tipo_item === 'ideia'));
@@ -807,10 +843,47 @@ onMounted(carregarDadosAdmin);
   border-color: #ef4444;
 }
 
-/* ─── Responsivo ────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .admin-sidebar { display: none; }
   .admin-main { padding: var(--cx-space-6) var(--cx-space-5); }
   .admin-grid { grid-template-columns: 1fr; }
+}
+
+/* Setas flutuantes de navegação nos cards no Admin */
+.card-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+  opacity: 0.85;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+.card-arrow:hover {
+  opacity: 1;
+  background: #10b981;
+  color: #0f172a;
+  border-color: #10b981;
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.card-arrow--left {
+  left: 8px;
+}
+
+.card-arrow--right {
+  right: 8px;
 }
 </style>
