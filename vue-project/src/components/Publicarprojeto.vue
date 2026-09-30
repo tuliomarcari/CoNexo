@@ -55,45 +55,6 @@
                 </select>
               </div>
 
-              <!-- BLOCO DE FRANQUIA / FILIAL -->
-              <div class="cx-field cx-field--filial-toggle">
-                <label class="cx-checkbox-box">
-                  <input type="checkbox" v-model="novo.eh_filial" class="cx-checkbox" />
-                  <span class="cx-checkbox-text">É uma filial ou franquia existente?</span>
-                </label>
-              </div>
-
-              <div v-if="novo.eh_filial" class="filial-box">
-                <div class="cx-field">
-                  <label for="proj-marca">Marca / Franquia Mãe</label>
-                  <input id="proj-marca" v-model="novo.marca_principal" type="text" placeholder="Ex: Cacau Show, McDonald's, O Boticário..." />
-                </div>
-
-                <div class="cx-field-row">
-                  <div class="cx-field">
-                    <label for="filial-uf">UF da Filial</label>
-                    <select id="filial-uf" v-model="novo.estado_filial" @change="carregarCidadesFilialPorUF">
-                      <option value="" disabled selected>UF</option>
-                      <option v-for="uf in estadosBR" :key="uf.sigla" :value="uf.sigla">{{ uf.sigla }}</option>
-                    </select>
-                  </div>
-                  <div class="cx-field cx-field--grow">
-                    <label for="filial-cidade">Cidade da Filial</label>
-                    <select id="filial-cidade" v-model="novo.cidade_filial" :disabled="!novo.estado_filial || carregandoCidadesFilial">
-                      <option value="" disabled selected>
-                        {{ carregandoCidadesFilial ? 'Carregando...' : (!novo.estado_filial ? 'Selecione a UF primeiro' : 'Selecione a cidade') }}
-                      </option>
-                      <option v-for="cid in cidadesFilial" :key="cid" :value="cid">{{ cid }}</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div class="cx-field">
-                  <label for="proj-repasse">Valor de Repasse / Investimento (R$)</label>
-                  <input id="proj-repasse" v-model="novo.valor_repasse" type="number" placeholder="Ex: 150000" min="0" />
-                </div>
-              </div>
-
               <!-- SELETOR DE IMAGEM OTIMIZADO -->
               <div class="cx-field">
                 <label for="proj-file">Foto / Logótipo do Local (Anexo)</label>
@@ -153,16 +114,6 @@
           <!-- BARRA DE FILTROS DE PROJETOS -->
           <div class="filter-bar">
             <div class="filter-group">
-              <!-- Filtro Modelo -->
-              <div class="filter-item">
-                <label for="filter-tipo">Modelo</label>
-                <select id="filter-tipo" v-model="filtroTipo">
-                  <option value="">Todos os Modelos</option>
-                  <option value="filial">🏬 Filiais / Franquias</option>
-                  <option value="original">🚀 Negócios Originais</option>
-                </select>
-              </div>
-
               <!-- Filtro UF -->
               <div class="filter-item">
                 <label for="filter-uf">Estado</label>
@@ -199,7 +150,7 @@
 
             <!-- Botão de Limpar Filtros -->
             <button 
-              v-if="filtroUF || filtroCidade || filtroNicho || filtroTipo" 
+              v-if="filtroUF || filtroCidade || filtroNicho" 
               @click="limparFiltros" 
               class="filter-reset-btn"
               title="Limpar filtros"
@@ -213,7 +164,7 @@
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
               <polyline points="9 22 9 12 15 12 15 22"/>
             </svg>
-            <p v-if="filtroUF || filtroCidade || filtroNicho || filtroTipo">Nenhum projeto encontrado para os filtros selecionados.</p>
+            <p v-if="filtroUF || filtroCidade || filtroNicho">Nenhum projeto encontrado para os filtros selecionados.</p>
             <p v-else>Nenhum projeto publicado ainda. Seja o primeiro.</p>
           </div>
 
@@ -225,14 +176,8 @@
               </div>
 
               <header class="project-item__head">
-                <span v-if="p.eh_filial || p.is_filial" class="project-item__badge project-item__badge--filial">
-                  🏬 Filial {{ p.marca_principal ? '• ' + p.marca_principal : '' }}
-                </span>
-                <span v-else class="project-item__badge">{{ p.nicho }}</span>
-
-                <span class="project-item__loc">
-                  📍 {{ (p.eh_filial || p.is_filial) && (p.cidade_filial || p.estado_filial) ? (p.cidade_filial || p.cidade) + ', ' + (p.estado_filial || p.estado) : p.cidade + ', ' + p.estado }}
-                </span>
+                <span class="project-item__badge">{{ p.nicho }}</span>
+                <span class="project-item__loc">{{ p.cidade }}, {{ p.estado }}</span>
               </header>
 
               <h3 class="project-item__title">{{ p.empresa }}</h3>
@@ -249,13 +194,6 @@
                     <span>Equity</span>
                     <strong>{{ p.porcentagem }}%</strong>
                   </div>
-                  <template v-if="(p.eh_filial || p.is_filial) && p.valor_repasse">
-                    <div class="project-item__fin-divider" aria-hidden="true"></div>
-                    <div class="project-item__fin-item">
-                      <span>Repasse</span>
-                      <strong class="text-emerald">R$ {{ Number(p.valor_repasse).toLocaleString('pt-BR') }}</strong>
-                    </div>
-                  </template>
                 </div>
 
                 <div class="project-item__actions">
@@ -363,12 +301,7 @@ const novo = ref({
   valor: '',
   porcentagem: '',
   email_contato: '',
-  telefone: '',
-  eh_filial: false,
-  marca_principal: '',
-  estado_filial: '',
-  cidade_filial: '',
-  valor_repasse: ''
+  telefone: ''
 });
 
 const estadosBR = [
@@ -437,31 +370,7 @@ const carregarCidadesPorUF = async () => {
   }
 };
 
-// Cidades da Filial
-const cidadesFilial = ref([]);
-const carregandoCidadesFilial = ref(false);
-
-const carregarCidadesFilialPorUF = async () => {
-  novo.value.cidade_filial = '';
-  cidadesFilial.value = [];
-
-  if (!novo.value.estado_filial) return;
-
-  carregandoCidadesFilial.value = true;
-  try {
-    const res = await axios.get(
-      `https://servicodados.ibge.gov.br/api/v1/localidades/estados/${novo.value.estado_filial}/municipios?orderBy=nome`
-    );
-    cidadesFilial.value = res.data.map(c => c.nome);
-  } catch (err) {
-    console.error("Erro ao carregar cidades da filial do IBGE:", err);
-  } finally {
-    carregandoCidadesFilial.value = false;
-  }
-};
-
 // Estados e lógica dos Filtros de Projetos
-const filtroTipo = ref(''); // '', 'filial', 'original'
 const filtroUF = ref('');
 const filtroCidade = ref('');
 const filtroNicho = ref('');
@@ -488,7 +397,6 @@ const carregarCidadesFiltroUF = async () => {
 };
 
 const limparFiltros = () => {
-  filtroTipo.value = '';
   filtroUF.value = '';
   filtroCidade.value = '';
   filtroNicho.value = '';
@@ -498,24 +406,11 @@ const limparFiltros = () => {
 const projetosFiltrados = computed(() => {
   if (!props.projetos) return [];
   return props.projetos.filter(p => {
-    const isFilial = Boolean(p.eh_filial || p.is_filial);
+    const matchUF = !filtroUF.value || (p.estado && p.estado.toUpperCase() === filtroUF.value.toUpperCase());
+    const matchCidade = !filtroCidade.value || (p.cidade && p.cidade.toLowerCase() === filtroCidade.value.toLowerCase());
+    const matchNicho = !filtroNicho.value || (p.nicho && p.nicho.toLowerCase() === filtroNicho.value.toLowerCase());
 
-    const matchTipo = !filtroTipo.value || 
-      (filtroTipo.value === 'filial' && isFilial) ||
-      (filtroTipo.value === 'original' && !isFilial);
-
-    const matchUF = !filtroUF.value || 
-      (p.estado && p.estado.toUpperCase() === filtroUF.value.toUpperCase()) ||
-      (p.estado_filial && p.estado_filial.toUpperCase() === filtroUF.value.toUpperCase());
-
-    const matchCidade = !filtroCidade.value || 
-      (p.cidade && p.cidade.toLowerCase() === filtroCidade.value.toLowerCase()) ||
-      (p.cidade_filial && p.cidade_filial.toLowerCase() === filtroCidade.value.toLowerCase());
-
-    const matchNicho = !filtroNicho.value || 
-      (p.nicho && p.nicho.toLowerCase() === filtroNicho.value.toLowerCase());
-
-    return matchTipo && matchUF && matchCidade && matchNicho;
+    return matchUF && matchCidade && matchNicho;
   });
 });
 
@@ -584,25 +479,8 @@ const enviarProjeto = () => {
     status: 'pendente'
   };
   emit('salvar', projetoFinal);
-  novo.value = {
-    empresa: '',
-    estado: '',
-    cidade: '',
-    nicho: '',
-    imagem_url: '',
-    descricao: '',
-    valor: '',
-    porcentagem: '',
-    email_contato: '',
-    telefone: '',
-    eh_filial: false,
-    marca_principal: '',
-    estado_filial: '',
-    cidade_filial: '',
-    valor_repasse: ''
-  };
+  Object.keys(novo.value).forEach(key => novo.value[key] = '');
   cidades.value = [];
-  cidadesFilial.value = [];
   removerImagemAnexada();
   alert("Projeto enviado com sucesso! Ele aparecerá na lista assim que o administrador aprová-lo.");
 };
@@ -1052,62 +930,5 @@ const fecharChat = () => {
     height: 90vh;
     border-radius: 12px;
   }
-}
-
-.cx-field--filial-toggle {
-  margin-top: 0.75rem;
-  margin-bottom: 0.5rem;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 12px 14px;
-  transition: all 0.2s ease;
-}
-
-.cx-field--filial-toggle:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.14);
-}
-
-.cx-checkbox-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.cx-checkbox {
-  width: 16px;
-  height: 16px;
-  accent-color: #10b981;
-  cursor: pointer;
-}
-
-.cx-checkbox-text {
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: var(--cx-text-muted, #cbd5e1);
-}
-
-.filial-box {
-  background: rgba(15, 23, 42, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.project-item__badge--filial {
-  background: rgba(16, 185, 129, 0.15) !important;
-  color: #10b981 !important;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.text-emerald {
-  color: #10b981 !important;
 }
 </style>
