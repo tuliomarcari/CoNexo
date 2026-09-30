@@ -207,8 +207,29 @@
           <div class="project-list" v-else>
             <article class="project-item" v-for="p in projetosFiltrados" :key="p.id">
               
-              <div v-if="p.imagem_url" class="project-item__img-container">
-                <img :src="p.imagem_url" :alt="p.empresa" class="project-item__img" />
+              <div v-if="(p.imagens && p.imagens.length > 0) || p.imagem_url" class="project-item__img-container">
+                <img 
+                  :src="(p.imagens && p.imagens.length > 0) ? (p.imagens[p.fotoAtivaIndex || 0] || p.imagem_url) : p.imagem_url" 
+                  :alt="p.empresa" 
+                  class="project-item__img" 
+                />
+                
+                <span v-if="p.imagens && p.imagens.length > 1" class="proj-card-img-badge">
+                  📷 {{ (p.fotoAtivaIndex || 0) + 1 }}/{{ p.imagens.length }}
+                </span>
+
+                <div v-if="p.imagens && p.imagens.length > 1" class="proj-card-thumbs-nav" @click.stop>
+                  <button 
+                    v-for="(imgSrc, i) in p.imagens" 
+                    :key="i"
+                    type="button"
+                    class="proj-card-thumb-dot"
+                    :class="{ 'proj-card-thumb-dot--active': (p.fotoAtivaIndex || 0) === i }"
+                    @click.stop="p.fotoAtivaIndex = i"
+                    :title="'Ver imagem ' + (i + 1)"
+                  >
+                  </button>
+                </div>
               </div>
 
               <header class="project-item__head">
@@ -1104,5 +1125,60 @@ const fecharChat = () => {
 
 .text-emerald {
   color: #10b981 !important;
+}
+
+/* ─── CARD MULTI-IMAGE CAROUSEL & BADGE STYLES (PROJETOS PAGE) ───────── */
+.project-item__img-container {
+  position: relative;
+}
+
+.proj-card-img-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 2;
+}
+
+.proj-card-thumbs-nav {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 4px 8px;
+  border-radius: 9999px;
+  backdrop-filter: blur(4px);
+  z-index: 2;
+}
+
+.proj-card-thumb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.proj-card-thumb-dot:hover {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.proj-card-thumb-dot--active {
+  background: #10b981;
+  transform: scale(1.25);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
 }
 </style>
