@@ -103,9 +103,33 @@
         <div class="admin-grid" v-else>
           <article class="admin-card" v-for="item in listaAtual" :key="item.id">
             
-            <!-- Imagem do projeto (se existir) -->
-            <div v-if="item.imagem_url" class="admin-card__img-container">
-              <img :src="item.imagem_url" :alt="item.empresa || item.titulo" class="admin-card__img" />
+            <!-- Imagens do projeto (Galeria completa para moderação/curadoria do Administrador) -->
+            <div v-if="(item.imagens && item.imagens.length > 0) || item.imagem_url" class="admin-card__gallery-area">
+              <div class="admin-card__img-container">
+                <img 
+                  :src="(item.imagens && item.imagens.length > 0) ? (item.imagens[item.fotoAtivaIndex || 0] || item.imagem_url) : item.imagem_url" 
+                  :alt="item.empresa || item.titulo" 
+                  class="admin-card__img" 
+                />
+                <span v-if="item.imagens && item.imagens.length > 1" class="admin-img-count-badge">
+                  📷 {{ (item.fotoAtivaIndex || 0) + 1 }}/{{ item.imagens.length }}
+                </span>
+              </div>
+
+              <!-- Miniaturas para navegar por todas as fotos do projeto -->
+              <div v-if="item.imagens && item.imagens.length > 1" class="admin-thumbs-row">
+                <button 
+                  v-for="(imgSrc, idx) in item.imagens" 
+                  :key="idx" 
+                  type="button" 
+                  class="admin-thumb-btn"
+                  :class="{ 'admin-thumb-btn--active': (item.fotoAtivaIndex || 0) === idx }"
+                  @click="item.fotoAtivaIndex = idx"
+                  :title="'Ver imagem ' + (idx + 1)"
+                >
+                  <img :src="imgSrc" :alt="'Miniatura ' + (idx + 1)" />
+                </button>
+              </div>
             </div>
 
             <header class="admin-card__head">
@@ -563,9 +587,14 @@ onMounted(carregarDadosAdmin);
 }
 
 /* Estilos ajustados para a imagem do card administrativo */
-.admin-card__img-container {
+.admin-card__gallery-area {
   width: calc(100% + 48px);
   margin: -24px -24px 16px -24px;
+}
+
+.admin-card__img-container {
+  position: relative;
+  width: 100%;
   max-height: 180px;
   overflow: hidden;
   background: var(--cx-bg-alt);
@@ -578,6 +607,57 @@ onMounted(carregarDadosAdmin);
   height: 180px;
   object-fit: cover;
   display: block;
+}
+
+.admin-img-count-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.admin-thumbs-row {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.3);
+  overflow-x: auto;
+}
+
+.admin-thumb-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  padding: 0;
+  background: #0f172a;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.admin-thumb-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-thumb-btn:hover {
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.admin-thumb-btn--active {
+  border-color: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
 }
 
 .admin-card__head {

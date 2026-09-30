@@ -170,6 +170,7 @@ async function inicializarBanco() {
       try { await connection.query(`ALTER TABLE projetos MODIFY COLUMN imagem_url LONGTEXT`); } catch (e) {}
       try { await connection.query(`ALTER TABLE projetos ADD COLUMN likes INT DEFAULT 0`); } catch (e) {}
       try { await connection.query(`ALTER TABLE projetos ADD COLUMN dislikes INT DEFAULT 0`); } catch (e) {}
+      try { await connection.query(`ALTER TABLE projetos ADD COLUMN imagens LONGTEXT`); } catch (e) {}
     } catch (e) {
       console.error("Aviso tabela projetos:", e.message);
     }
@@ -353,6 +354,32 @@ app.post(["/login", "/api/login"], async (req, res) => {
   }
 });
 
+// Helper para normalizar lista de imagens por projeto (com limite de até 5 imagens no backend)
+function normalizarImagensProjeto(row) {
+  if (!row) return row;
+  let imgs = [];
+  if (row.imagens) {
+    try {
+      if (Array.isArray(row.imagens)) {
+        imgs = row.imagens;
+      } else if (typeof row.imagens === 'string') {
+        const parsed = JSON.parse(row.imagens);
+        if (Array.isArray(parsed)) imgs = parsed;
+      }
+    } catch (e) {
+      imgs = [];
+    }
+  }
+  if (imgs.length === 0 && row.imagem_url) {
+    imgs = [row.imagem_url];
+  }
+  // Garante no máximo 5 imagens por projeto no backend
+  imgs = imgs.filter(img => typeof img === 'string' && img.trim() !== '').slice(0, 5);
+  row.imagens = imgs;
+  row.imagem_url = imgs[0] || row.imagem_url || null;
+  return row;
+}
+
 // LISTAGEM PÚBLICA DE PROJETOS APROVADOS (Com Votos e Status de Voto do Usuário Logado)
 app.get(["/projetos", "/api/projetos"], autenticarToken, async (req, res) => {
   const usuario_id = req.usuario?.id || 0;
@@ -377,7 +404,7 @@ app.get(["/projetos", "/api/projetos"], autenticarToken, async (req, res) => {
       GROUP BY p.id
       ORDER BY p.id DESC
     `, [usuario_id]);
-    res.json(rows);
+    res.json(rows.map(normalizarImagensProjeto));
   } catch (err) {
     console.error("Erro ao listar projetos com agregador de votos:", err.message);
     try {
@@ -390,7 +417,7 @@ app.get(["/projetos", "/api/projetos"], autenticarToken, async (req, res) => {
         WHERE p.status = 'aprovado' OR p.status IS NULL OR p.status = '' 
         ORDER BY p.id DESC
       `);
-      res.json(rowsSimples);
+      res.json(rowsSimples.map(normalizarImagensProjeto));
     } catch (e) {
       res.status(500).json({ error: "Erro interno ao listar projetos" });
     }
@@ -423,7 +450,7 @@ app.get(["/projetos/:id", "/api/projetos/:id"], autenticarToken, async (req, res
       return res.status(404).json({ error: "Projeto não encontrado" });
     }
 
-    res.json(rows[0]);
+    res.json(normalizarImagensProjeto(rows[0]));
   } catch (err) {
     console.error("Erro ao buscar detalhes do projeto:", err);
     res.status(500).json({ error: "Erro interno ao buscar projeto" });
@@ -432,7 +459,10 @@ app.get(["/projetos/:id", "/api/projetos/:id"], autenticarToken, async (req, res
 
 // CRIAÇÃO DE PROJETO
 app.post(["/projetos", "/api/projetos"], async (req, res) => {
-  const { empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, email, telefone, imagem_url, status } = req.body;
+  const { 
+    empresa, estado, cidade, nicho, descricao, valor, porcentagem, 
+    usuario_id, email_contato, email, telefone, imagem_url, imagens, status 
+  } = req.body;
 
   try {
     const valorNum = (valor !== undefined && valor !== null && valor !== '') ? parseFloat(valor) : 0;
@@ -440,12 +470,34 @@ app.post(["/projetos", "/api/projetos"], async (req, res) => {
     const usrId = usuario_id ? parseInt(usuario_id, 10) : null;
     const destEmail = email_contato || email || null;
     const tel = telefone || null;
-    const img = imagem_url || null;
     const st = status || 'pendente';
 
+    // Processamento de múltiplas imagens (limite de até 5 imagens no backend)
+    let listImagens = [];
+    if (Array.isArray(imagens)) {
+      listImagens = imagens.filter(i => typeof i === 'string' && i.trim() !== '');
+    } else if (typeof imagens === 'string') {
+      try {
+        const parsed = JSON.parse(imagens);
+        if (Array.isArray(parsed)) {
+          listImagens = parsed.filter(i => typeof i === 'string' && i.trim() !== '');
+        }
+      } catch (e) {}
+    }
+
+    if (listImagens.length === 0 && imagem_url && typeof imagem_url === 'string' && imagem_url.trim() !== '') {
+      listImagens = [imagem_url];
+    }
+
+    // Limita estritamente a no máximo 5 imagens por projeto
+    listImagens = listImagens.slice(0, 5);
+
+    const capaImg = listImagens[0] || (typeof imagem_url === 'string' ? imagem_url : null);
+    const imagensJson = listImagens.length > 0 ? JSON.stringify(listImagens) : null;
+
     await pool.query(
-      `INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, imagem_url, status, likes, dislikes) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+      `INSERT INTO projetos (empresa, estado, cidade, nicho, descricao, valor, porcentagem, usuario_id, email_contato, telefone, imagem_url, imagens, status, likes, dislikes) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
       [
         empresa || '',
         estado || '',
@@ -457,7 +509,8 @@ app.post(["/projetos", "/api/projetos"], async (req, res) => {
         usrId,
         destEmail,
         tel,
-        img,
+        capaImg,
+        imagensJson,
         st
       ]
     );
@@ -1063,7 +1116,8 @@ app.get(["/admin/pendentes", "/api/admin/pendentes"], async (req, res) => {
   try {
     const [projetos] = await pool.query("SELECT *, 'projeto' as tipo_item FROM projetos WHERE status = 'pendente'");
     const [ideias] = await pool.query("SELECT *, 'ideia' as tipo_item FROM ideias WHERE status = 'pendente'");
-    res.json([...projetos, ...ideias]);
+    const projetosNormalizados = projetos.map(normalizarImagensProjeto);
+    res.json([...projetosNormalizados, ...ideias]);
   } catch (err) {
     console.error("Erro ao carregar pendentes:", err);
     res.status(500).json({ error: "Erro ao carregar pendentes" });

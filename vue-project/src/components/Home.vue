@@ -104,14 +104,32 @@
 
         <div class="projects__grid" v-else>
           <article class="project-card" v-for="p in projetosEmDestaque" :key="p.id">
-            <!-- Imagem do Projeto / Logótipo com Fallback -->
-            <div class="project-card__img-container" :class="{ 'project-card__img-container--placeholder': !(p.imagem_url || p.foto_url || p.imagem) }">
-              <img 
-                v-if="p.imagem_url || p.foto_url || p.imagem" 
-                :src="p.imagem_url || p.foto_url || p.imagem" 
-                :alt="p.empresa" 
-                class="project-card__img" 
-              />
+            <!-- Imagem do Projeto / Galeria com Fallback -->
+            <div class="project-card__img-container" :class="{ 'project-card__img-container--placeholder': !((p.imagens && p.imagens.length > 0) || p.imagem_url || p.foto_url || p.imagem) }">
+              <template v-if="(p.imagens && p.imagens.length > 0) || p.imagem_url || p.foto_url || p.imagem">
+                <img 
+                  :src="(p.imagens && p.imagens.length > 0) ? (p.imagens[p.fotoAtivaIndex || 0] || p.imagem_url) : (p.imagem_url || p.foto_url || p.imagem)" 
+                  :alt="p.empresa" 
+                  class="project-card__img" 
+                />
+                
+                <span v-if="p.imagens && p.imagens.length > 1" class="home-card-img-badge">
+                  📷 {{ (p.fotoAtivaIndex || 0) + 1 }}/{{ p.imagens.length }}
+                </span>
+
+                <div v-if="p.imagens && p.imagens.length > 1" class="home-card-thumbs-nav" @click.stop>
+                  <button 
+                    v-for="(imgSrc, i) in p.imagens" 
+                    :key="i"
+                    type="button"
+                    class="home-card-thumb-dot"
+                    :class="{ 'home-card-thumb-dot--active': (p.fotoAtivaIndex || 0) === i }"
+                    @click.stop="p.fotoAtivaIndex = i"
+                    :title="'Ver imagem ' + (i + 1)"
+                  >
+                  </button>
+                </div>
+              </template>
               <template v-else>
                 <div class="project-card__placeholder-icon" aria-hidden="true">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -976,5 +994,55 @@ onUnmounted(() => {
   }
   .cx-footer__inner { flex-direction: column; text-align: center; }
   .how__step { padding: var(--cx-space-6); }
+}
+
+.home-card-img-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 2;
+}
+
+.home-card-thumbs-nav {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 4px 8px;
+  border-radius: 9999px;
+  backdrop-filter: blur(4px);
+  z-index: 2;
+}
+
+.home-card-thumb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.home-card-thumb-dot:hover {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.home-card-thumb-dot--active {
+  background: #10b981;
+  transform: scale(1.25);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
 }
 </style>

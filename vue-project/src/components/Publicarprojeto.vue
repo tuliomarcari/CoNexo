@@ -55,20 +55,56 @@
                 </select>
               </div>
 
-              <!-- SELETOR DE IMAGEM OTIMIZADO -->
+              <!-- SELETOR DE MÚLTIPLAS IMAGENS (ATÉ 5 IMAGENS) -->
               <div class="cx-field">
-                <label for="proj-file">Foto / Logótipo do Local (Anexo)</label>
-                <input 
-                  id="proj-file" 
-                  type="file" 
-                  accept="image/*" 
-                  @change="selecionarImagemDocumento" 
-                  class="cx-file-input" 
-                />
+                <label for="proj-file">Fotos do Projeto (Até 5 fotos)</label>
+                <div class="cx-upload-box">
+                  <input 
+                    id="proj-file" 
+                    type="file" 
+                    accept="image/*" 
+                    multiple 
+                    :disabled="novo.imagens.length >= 5"
+                    @change="selecionarImagensDocumento" 
+                    class="cx-file-input" 
+                  />
+                  <p class="cx-upload-help">
+                    <span v-if="novo.imagens.length < 5">Clique para escolher ou soltar até 5 fotos (PNG/JPG).</span>
+                    <span v-else class="text-emerald">✓ Limite máximo de 5 fotos atingido.</span>
+                  </p>
+                </div>
                 
-                <div v-if="novo.imagem_url" class="cx-img-preview">
-                  <img :src="novo.imagem_url" alt="Pré-visualização" />
-                  <button type="button" @click="removerImagemAnexada" class="cx-btn-remove-img">✕ Remover Imagem</button>
+                <!-- GALERIA DE MINIATURAS COM BADGE DE CAPA -->
+                <div v-if="novo.imagens.length > 0" class="cx-multi-img-grid">
+                  <div 
+                    v-for="(img, idx) in novo.imagens" 
+                    :key="idx" 
+                    class="cx-thumb-card"
+                    :class="{ 'cx-thumb-card--capa': idx === 0 }"
+                  >
+                    <img :src="img" :alt="'Foto ' + (idx + 1)" class="cx-thumb-img" />
+                    <span class="cx-thumb-badge">{{ idx === 0 ? 'Capa' : '#' + (idx + 1) }}</span>
+                    
+                    <div class="cx-thumb-actions">
+                      <button 
+                        v-if="idx > 0" 
+                        type="button" 
+                        @click="definirComoCapa(idx)" 
+                        class="cx-thumb-btn cx-thumb-btn--star" 
+                        title="Definir como Capa Principal"
+                      >
+                        ★ Capa
+                      </button>
+                      <button 
+                        type="button" 
+                        @click="removerImagemPorIndice(idx)" 
+                        class="cx-thumb-btn cx-thumb-btn--del" 
+                        title="Remover esta foto"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -297,6 +333,7 @@ const novo = ref({
   cidade: '',
   nicho: '',
   imagem_url: '',
+  imagens: [],
   descricao: '',
   valor: '',
   porcentagem: '',
@@ -421,67 +458,105 @@ const mensagens = ref([]);
 const novaMensagem = ref('');
 const chatBodyRef = ref(null);
 
-// Função de redimensionamento e compressão inteligente via Canvas
-const selecionarImagemDocumento = (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
+// Função de seleção e compressão de múltiplas imagens (até 5 fotos por projeto)
+const selecionarImagensDocumento = (event) => {
+  const files = Array.from(event.target.files || []);
+  if (files.length === 0) return;
 
-  if (!file.type.startsWith('image/')) {
-    alert("Por favor, selecione um arquivo de imagem válido.");
+  const limiteMax = 5;
+  const espacoLivre = limiteMax - novo.value.imagens.length;
+
+  if (espacoLivre <= 0) {
+    alert("Limite máximo de 5 imagens por projeto já atingido.");
     event.target.value = '';
     return;
   }
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let width = img.width;
-      let height = img.height;
+  const selecionados = files.slice(0, espacoLivre);
+  if (files.length > espacoLivre) {
+    alert(`É permitido anexar no máximo 5 imagens por projeto. Foram adicionadas apenas as primeiras ${espacoLivre} foto(s).`);
+  }
 
-      const MAX_SIZE = 800;
-      if (width > height) {
-        if (width > MAX_SIZE) {
-          height *= MAX_SIZE / width;
-          width = MAX_SIZE;
+  selecionados.forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        const MAX_SIZE = 800;
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
         }
-      } else {
-        if (height > MAX_SIZE) {
-          width *= MAX_SIZE / height;
-          height = MAX_SIZE;
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.7);
+        if (novo.value.imagens.length < 5) {
+          novo.value.imagens.push(imgData);
+          novo.value.imagem_url = novo.value.imagens[0];
         }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // Compacta para JPEG com qualidade 0.7 para garantir envio perfeito
-      novo.value.imagem_url = canvas.toDataURL('image/jpeg', 0.7);
+      };
+      img.src = e.target.result;
     };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+    reader.readAsDataURL(file);
+  });
+
+  event.target.value = '';
 };
 
-const removerImagemAnexada = () => {
-  novo.value.imagem_url = '';
-  const fileInput = document.getElementById('proj-file');
-  if (fileInput) fileInput.value = '';
+const removerImagemPorIndice = (idx) => {
+  novo.value.imagens.splice(idx, 1);
+  novo.value.imagem_url = novo.value.imagens[0] || '';
+};
+
+const definirComoCapa = (idx) => {
+  if (idx <= 0 || idx >= novo.value.imagens.length) return;
+  const item = novo.value.imagens.splice(idx, 1)[0];
+  novo.value.imagens.unshift(item);
+  novo.value.imagem_url = novo.value.imagens[0];
 };
 
 const enviarProjeto = () => {
+  if (novo.value.imagens.length === 0 && novo.value.imagem_url) {
+    novo.value.imagens = [novo.value.imagem_url];
+  }
   const projetoFinal = {
     ...novo.value,
+    imagem_url: novo.value.imagens[0] || novo.value.imagem_url || '',
     usuario_id: props.user?.id,
     status: 'pendente'
   };
   emit('salvar', projetoFinal);
-  Object.keys(novo.value).forEach(key => novo.value[key] = '');
+  novo.value = {
+    empresa: '',
+    estado: '',
+    cidade: '',
+    nicho: '',
+    imagem_url: '',
+    imagens: [],
+    descricao: '',
+    valor: '',
+    porcentagem: '',
+    email_contato: '',
+    telefone: ''
+  };
   cidades.value = [];
-  removerImagemAnexada();
   alert("Projeto enviado com sucesso! Ele aparecerá na lista assim que o administrador aprová-lo.");
 };
 
@@ -930,5 +1005,104 @@ const fecharChat = () => {
     height: 90vh;
     border-radius: 12px;
   }
+}
+
+.cx-upload-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.cx-upload-box:hover {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.03);
+}
+
+.cx-upload-help {
+  font-size: 0.78rem;
+  color: var(--cx-text-muted, #94a3b8);
+  margin-top: 6px;
+}
+
+.cx-multi-img-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.cx-thumb-card {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0f172a;
+  aspect-ratio: 1;
+}
+
+.cx-thumb-card--capa {
+  border-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.cx-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cx-thumb-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+}
+
+.cx-thumb-card--capa .cx-thumb-badge {
+  background: #10b981;
+  color: #0f172a;
+}
+
+.cx-thumb-actions {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  display: flex;
+  gap: 4px;
+}
+
+.cx-thumb-btn {
+  background: rgba(15, 23, 42, 0.85);
+  border: none;
+  color: #ffffff;
+  font-size: 0.65rem;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cx-thumb-btn--del:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.cx-thumb-btn--star:hover {
+  background: #f59e0b;
+  color: #0f172a;
+}
+
+.text-emerald {
+  color: #10b981 !important;
 }
 </style>
