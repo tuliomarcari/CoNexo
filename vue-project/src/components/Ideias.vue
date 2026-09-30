@@ -333,6 +333,7 @@ const votar = async (item, tipo) => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--cx-space-5);
+  align-items: stretch;
 }
 
 .ideia-card {
@@ -343,6 +344,11 @@ const votar = async (item, tipo) => {
   display: flex;
   flex-direction: column;
   gap: var(--cx-space-3);
+  height: auto;
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+  box-sizing: border-box;
   transition: box-shadow var(--cx-transition-base), border-color var(--cx-transition-base);
 }
 
@@ -355,6 +361,8 @@ const votar = async (item, tipo) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--cx-space-2);
+  flex-wrap: wrap;
 }
 
 .ideia-card__badge {
@@ -366,6 +374,7 @@ const votar = async (item, tipo) => {
   background: var(--cx-primary-light);
   padding: 3px 10px;
   border-radius: var(--cx-radius-full);
+  word-break: break-word;
 }
 
 .ideia-card__delete {
@@ -379,6 +388,7 @@ const votar = async (item, tipo) => {
   border-radius: var(--cx-radius-md);
   color: var(--cx-text-faint);
   cursor: pointer;
+  flex-shrink: 0;
   transition: border-color var(--cx-transition-fast), color var(--cx-transition-fast), background var(--cx-transition-fast);
 }
 
@@ -393,28 +403,38 @@ const votar = async (item, tipo) => {
   font-weight: 700;
   color: var(--cx-text);
   letter-spacing: -0.01em;
-  line-height: 1.3;
+  line-height: 1.35;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .ideia-card__desc {
   font-size: var(--cx-text-sm);
   color: var(--cx-text-2);
-  line-height: 1.7;
+  line-height: 1.65;
   flex: 1;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  margin-bottom: var(--cx-space-2);
 }
 
 .ideia-card__foot {
   border-top: 1px solid var(--cx-border-soft);
   padding-top: var(--cx-space-3);
+  margin-top: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--cx-space-3);
+  flex-wrap: wrap;
 }
 
 .ideia-card__date {
   font-size: var(--cx-text-xs);
   color: var(--cx-text-faint);
   letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 
 /* BOTÕES DE VOTAÇÃO */
@@ -422,13 +442,14 @@ const votar = async (item, tipo) => {
   display: flex;
   align-items: center;
   gap: var(--cx-space-2);
+  flex-wrap: wrap;
 }
 
 .vote-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: var(--cx-radius-md);
   font-size: var(--cx-text-xs);
   font-weight: 600;
@@ -437,6 +458,7 @@ const votar = async (item, tipo) => {
   background: var(--cx-bg);
   color: var(--cx-text-2);
   cursor: pointer;
+  flex-shrink: 0;
   transition: border-color var(--cx-transition-fast), color var(--cx-transition-fast), background var(--cx-transition-fast);
 }
 
@@ -496,10 +518,36 @@ const votar = async (item, tipo) => {
     padding: var(--cx-space-6) var(--cx-space-4);
   }
   .ideia-card {
-    padding: var(--cx-space-5) var(--cx-space-4);
+    padding: 1.25rem 1rem;
+    gap: var(--cx-space-3);
+    height: auto;
+    min-height: auto;
   }
   .ideias-list {
     grid-template-columns: 1fr;
+    gap: var(--cx-space-4);
+  }
+  .ideia-card__title {
+    font-size: var(--cx-text-base);
+  }
+  .ideia-card__desc {
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+  .ideia-card__foot {
+    gap: var(--cx-space-2);
+  }
+}
+
+@media (max-width: 480px) {
+  .ideia-card__foot {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--cx-space-2);
+  }
+  .vote-group {
+    width: 100%;
+    justify-content: flex-start;
   }
 }
 </style>
